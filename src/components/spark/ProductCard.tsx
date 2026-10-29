@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { formatPrice, type Product } from "@/data/mockData";
-import { ConditionBadge, SaleStatusText } from "@/components/spark/Badges";
+import { SaleStatusText } from "@/components/spark/Badges";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-export function ProductCard({ product, linked = true }: { product: Product; linked?: boolean }) {
+export function ProductCard({ product, linked = true, meta }: { product: Product; linked?: boolean; meta?: string }) {
   const { wishlistIds, toggleWishlist } = useSpark();
   const mounted = useMounted();
   const wished = mounted && wishlistIds.includes(product.id);
@@ -23,21 +23,18 @@ export function ProductCard({ product, linked = true }: { product: Product; link
         alt={product.title}
         className="h-full w-full transition duration-500 group-hover:scale-[1.03]"
       />
-      <div className="absolute left-3 top-3">
-        <ConditionBadge condition={product.condition} />
-      </div>
     </div>
   );
 
   const copy = (
     <div className="flex flex-1 flex-col gap-1 px-1 py-3">
       <p className="text-[11px] tracking-wide text-slate-400">
-        {product.ip} · {product.category}
+        {meta ?? [product.ip, product.category, product.country].filter(Boolean).join(" · ")}
       </p>
       <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900">{product.title}</h2>
       <div className="mt-auto flex items-end justify-between gap-3 pt-2">
         <p className={`text-base font-semibold tabular-nums tracking-tight ${sold ? "text-slate-400 line-through" : "text-slate-900"}`}>
-          {product.price > 0 ? formatPrice(product.price) : "가격 미정"}
+          {formatPrice(product.price)}
         </p>
         <SaleStatusText status={product.saleStatus} />
       </div>

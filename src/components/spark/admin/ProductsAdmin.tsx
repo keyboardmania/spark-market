@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PRODUCT_FLAGS, formatPrice } from "@/data/mockData";
-import { ConditionBadge, SaleStatusText } from "@/components/spark/Badges";
+import { SaleStatusText } from "@/components/spark/Badges";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
@@ -64,7 +64,6 @@ export function ProductsAdmin() {
                     <span className="block font-medium text-slate-900">{product.title}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                       {product.ip}
-                      <ConditionBadge condition={product.condition} />
                       {flag ? <StatusPill tone={flag.flag === "금지" ? "rose" : "amber"}>{flag.flag}</StatusPill> : null}
                     </span>
                   </td>

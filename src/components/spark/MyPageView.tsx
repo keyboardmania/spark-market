@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { AdultVerifyCard } from "@/components/spark/AuthScreens";
+import { useRouter } from "next/navigation";
+import { AddressBook } from "@/components/spark/AddressBook";
 import { ProductCard } from "@/components/spark/ProductCard";
 import { ghostButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import type { SparkUser } from "@/data/mockData";
 
 export function MyPageView() {
+  const router = useRouter();
   const mounted = useMounted();
-  const { user, logout, adultVerified, wishlistIds, products, orders, cartIds } = useSpark();
+  const { user, logout, wishlistIds, products, orders, cartIds } = useSpark();
   const wished = mounted ? products.filter((product) => wishlistIds.includes(product.id)) : [];
   const purchaseCount = mounted ? orders.filter((order) => order.role === "purchase").length : 0;
 
@@ -21,11 +24,20 @@ export function MyPageView() {
           {mounted && user ? `${user.name}님의 Spark` : "마이페이지"}
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          {mounted && user ? `${user.email} · ${providerLabel(user.provider)}` : "로그인하면 거래와 인증 상태가 이 화면에 모여요."}
+          {mounted && user ? `${user.email} · ${providerLabel(user.provider)}` : "로그인하면 거래와 배송지가 이 화면에 모여요."}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {mounted && user ? (
-            <button type="button" onClick={logout} className={ghostButtonClass}>로그아웃</button>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                router.push("/");
+              }}
+              className={ghostButtonClass}
+            >
+              로그아웃
+            </button>
           ) : (
             <>
               <Link href="/login" className={ghostButtonClass}>로그인</Link>
@@ -33,11 +45,10 @@ export function MyPageView() {
             </>
           )}
         </div>
-        <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <dl className="mt-6 grid grid-cols-3 gap-3">
           <Stat label="장바구니" value={mounted ? String(cartIds.length) : "0"} />
           <Stat label="찜" value={mounted ? String(wishlistIds.length) : "0"} />
           <Stat label="구매" value={String(purchaseCount)} />
-          <Stat label="성인 인증" value={mounted && adultVerified ? "완료" : "대기"} />
         </dl>
       </div>
 
@@ -48,9 +59,7 @@ export function MyPageView() {
         <Shortcut href="/cart" label="장바구니" />
       </div>
 
-      <div className="mt-8 max-w-md">
-        <AdultVerifyCard />
-      </div>
+      <AddressBook />
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-slate-900">찜한 상품</h2>
@@ -87,9 +96,10 @@ function Shortcut({ href, label }: { href: string; label: string }) {
   );
 }
 
-function providerLabel(provider: "email" | "kakao" | "naver" | "apple") {
-  if (provider === "kakao") return "카카오";
-  if (provider === "naver") return "네이버";
+function providerLabel(provider: SparkUser["provider"]) {
+  if (provider === "line") return "LINE";
+  if (provider === "google") return "Google";
+  if (provider === "x") return "X";
   if (provider === "apple") return "Apple";
   return "이메일";
 }

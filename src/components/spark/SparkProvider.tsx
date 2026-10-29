@@ -2,32 +2,54 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  ADDRESS_LIMIT,
   CHAT_ROOMS,
   ORDERS,
   PRODUCTS,
   SELLER_REPLIES,
   formatTime,
   getSeller,
+  type AddressDraft,
   type ChatMessage,
   type ChatRoom,
   type Order,
   type Product,
+  type ShippingAddress,
   type SparkUser,
 } from "@/data/mockData";
 
+type StoredAccount = {
+  name: string;
+  email: string;
+  password: string;
+  provider: SparkUser["provider"];
+};
+
+const RESERVED_EMAILS = new Set(["taken@spark.market"]);
+
 type SparkContextValue = {
   user: SparkUser | null;
-  adultVerified: boolean;
   login: (user: SparkUser) => void;
   logout: () => void;
-  verifyAdult: () => void;
+  isEmailTaken: (email: string) => boolean;
+  findAccount: (email: string) => SparkUser | null;
+  registerAccount: (account: StoredAccount) => void;
+  authenticate: (email: string, password: string) => SparkUser | null;
   cartIds: string[];
   addToCart: (id: string) => void;
   removeFromCart: (id: string) => void;
   wishlistIds: string[];
   toggleWishlist: (id: string) => void;
   products: Product[];
+  isProductDeleted: (id: string) => boolean;
   addProduct: (product: Product) => void;
+  updateProduct: (id: string, patch: Partial<Product>) => boolean;
+  softDeleteProduct: (id: string) => void;
+  addresses: ShippingAddress[];
+  addAddress: (draft: AddressDraft) => "ok" | "limit";
+  updateAddress: (id: string, draft: AddressDraft) => "ok" | "missing" | "keep-default";
+  removeAddress: (id: string) => "ok" | "missing" | "keep-default";
+  setDefaultAddress: (id: string) => void;
   orders: Order[];
   placeOrder: (order: Order) => void;
   updateOrder: (id: string, patch: Partial<Order>) => void;
@@ -43,10 +65,13 @@ const SparkContext = createContext<SparkContextValue | null>(null);
 
 export function SparkProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SparkUser | null>(null);
-  const [adultVerified, setAdultVerified] = useState(false);
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [cartIds, setCartIds] = useState<string[]>([]);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
-  const [customProducts, setCustomProducts] = useState<Product[]>([]);
+  const [records, setRecords] = useState<Array<Product & { deletedAt: string | null }>>(() =>
+    PRODUCTS.map((product) => ({ ...product, deletedAt: null })),
+  );
+  const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
   const [orders, setOrders] = useState<Order[]>(ORDERS);
   const [rooms, setRooms] = useState<ChatRoom[]>(CHAT_ROOMS);
   const [typingRoomId, setTypingRoomId] = useState<string | null>(null);
@@ -60,10 +85,13 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200);
   }, []);
 
-  const products = useMemo(() => {
-    const customIds = new Set(customProducts.map((product) => product.id));
-    return [...customProducts, ...PRODUCTS.filter((product) => !customIds.has(product.id))];
-  }, [customProducts]);
+  const products = useMemo(
+    () =>
+      records
+        .filter((product) => product.deletedAt === null)
+        .map(({ deletedAt: _deletedAt, ...product }) => product),
+    [records],
+  );
 
   const login = useCallback((next: SparkUser) => {
     setUser(next);
@@ -73,9 +101,44 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const verifyAdult = useCallback(() => {
-    setAdultVerified(true);
+  const isEmailTaken = useCallback(
+    (email: string) => {
+      const key = email.trim().toLowerCase();
+      if (!key) return false;
+      if (RESERVED_EMAILS.has(key)) return true;
+      return accounts.some((account) => account.email.toLowerCase() === key);
+    },
+    [accounts],
+  );
+
+  const findAccount = useCallback(
+    (email: string): SparkUser | null => {
+      const key = email.trim().toLowerCase();
+      const found = accounts.find((account) => account.email.toLowerCase() === key);
+      if (!found) return null;
+      return { name: found.name, email: found.email, provider: found.provider };
+    },
+    [accounts],
+  );
+
+  const registerAccount = useCallback((account: StoredAccount) => {
+    const email = account.email.trim();
+    const key = email.toLowerCase();
+    setAccounts((current) => {
+      if (current.some((item) => item.email.toLowerCase() === key)) return current;
+      return [...current, { ...account, email }];
+    });
   }, []);
+
+  const authenticate = useCallback(
+    (email: string, password: string): SparkUser | null => {
+      const key = email.trim().toLowerCase();
+      const found = accounts.find((account) => account.email.toLowerCase() === key);
+      if (!found || found.provider !== "email" || !found.password || found.password !== password) return null;
+      return { name: found.name, email: found.email, provider: "email" };
+    },
+    [accounts],
+  );
 
   const addToCart = useCallback(
     (id: string) => {
@@ -102,8 +165,99 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     [notify, wishlistIds],
   );
 
+  const isProductDeleted = useCallback(
+    (id: string) => records.some((product) => product.id === id && product.deletedAt !== null),
+    [records],
+  );
+
   const addProduct = useCallback((product: Product) => {
-    setCustomProducts((current) => [product, ...current]);
+    setRecords((current) => [{ ...product, deletedAt: null }, ...current.filter((item) => item.id !== product.id)]);
+  }, []);
+
+  const updateProduct = useCallback(
+    (id: string, patch: Partial<Product>) => {
+      const current = records.find((product) => product.id === id);
+      if (!current || current.deletedAt || current.saleStatus === "판매완료") return false;
+      setRecords((items) =>
+        items.map((item) =>
+          item.id === id ? { ...item, ...patch, id: item.id, sellerId: item.sellerId, deletedAt: null } : item,
+        ),
+      );
+      return true;
+    },
+    [records],
+  );
+
+  const softDeleteProduct = useCallback((id: string) => {
+    const deletedAt = new Date().toISOString();
+    setRecords((current) => current.map((item) => (item.id === id ? { ...item, deletedAt } : item)));
+    setCartIds((current) => current.filter((item) => item !== id));
+  }, []);
+
+  const addAddress = useCallback((draft: AddressDraft) => {
+    if (addresses.length >= ADDRESS_LIMIT) return "limit" as const;
+    const id = `addr-${crypto.randomUUID()}`;
+    setAddresses((current) => {
+      if (current.length >= ADDRESS_LIMIT) return current;
+      const isDefault = current.length === 0 || draft.isDefault;
+      const next: ShippingAddress = {
+        id,
+        name: draft.name.trim(),
+        phone: draft.phone.trim(),
+        address: draft.address.trim(),
+        detail: draft.detail.trim(),
+        postalCode: draft.postalCode.trim(),
+        isDefault,
+      };
+      const rest = isDefault ? current.map((item) => ({ ...item, isDefault: false })) : current;
+      return [...rest, next];
+    });
+    return "ok" as const;
+  }, [addresses.length]);
+
+  const updateAddress = useCallback((id: string, draft: AddressDraft) => {
+    const target = addresses.find((item) => item.id === id);
+    if (!target) return "missing" as const;
+    if (target.isDefault && !draft.isDefault) return "keep-default" as const;
+    setAddresses((current) => {
+      const found = current.find((item) => item.id === id);
+      if (!found || (found.isDefault && !draft.isDefault)) return current;
+      const isDefault = current.length === 1 || draft.isDefault;
+      return current.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            name: draft.name.trim(),
+            phone: draft.phone.trim(),
+            address: draft.address.trim(),
+            detail: draft.detail.trim(),
+            postalCode: draft.postalCode.trim(),
+            isDefault,
+          };
+        }
+        return isDefault ? { ...item, isDefault: false } : item;
+      });
+    });
+    return "ok" as const;
+  }, [addresses]);
+
+  const removeAddress = useCallback((id: string) => {
+    const target = addresses.find((item) => item.id === id);
+    if (!target) return "missing" as const;
+    if (target.isDefault) return "keep-default" as const;
+    setAddresses((current) => {
+      const found = current.find((item) => item.id === id);
+      if (!found || found.isDefault) return current;
+      return current.filter((item) => item.id !== id);
+    });
+    return "ok" as const;
+  }, [addresses]);
+
+  const setDefaultAddress = useCallback((id: string) => {
+    setAddresses((current) => {
+      if (!current.some((item) => item.id === id)) return current;
+      return current.map((item) => ({ ...item, isDefault: item.id === id }));
+    });
   }, []);
 
   const placeOrder = useCallback((order: Order) => {
@@ -184,17 +338,27 @@ export function SparkProvider({ children }: { children: ReactNode }) {
 
   const value: SparkContextValue = {
     user,
-    adultVerified,
     login,
     logout,
-    verifyAdult,
+    isEmailTaken,
+    findAccount,
+    registerAccount,
+    authenticate,
     cartIds,
     addToCart,
     removeFromCart,
     wishlistIds,
     toggleWishlist,
     products,
+    isProductDeleted,
     addProduct,
+    updateProduct,
+    softDeleteProduct,
+    addresses,
+    addAddress,
+    updateAddress,
+    removeAddress,
+    setDefaultAddress,
     orders,
     placeOrder,
     updateOrder,

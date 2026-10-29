@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice, getSeller, type Product } from "@/data/mockData";
-import { ConditionBadge, SaleStatusText } from "@/components/spark/Badges";
+import { SaleStatusText } from "@/components/spark/Badges";
 import { ProductVisual } from "@/components/spark/ProductVisual";
+import { DeleteProductButton } from "@/components/spark/SellForm";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
@@ -12,9 +13,10 @@ import { useMounted } from "@/components/spark/useMounted";
 export function ProductDetailView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const router = useRouter();
   const mounted = useMounted();
-  const { products, user, wishlistIds, toggleWishlist, addToCart, ensureRoom } = useSpark();
+  const { products, user, wishlistIds, toggleWishlist, addToCart, ensureRoom, isProductDeleted } = useSpark();
+  const deleted = mounted && isProductDeleted(id);
   const live = products.find((product) => product.id === id);
-  const product = initialProduct ?? (mounted ? live : undefined);
+  const product = deleted ? undefined : mounted ? (live ?? initialProduct) : initialProduct;
 
   if (!initialProduct && !mounted) {
     return <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6"><div className="h-96 animate-pulse rounded-2xl bg-slate-100" /></div>;
@@ -52,22 +54,20 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
 
       <div className="flex flex-col">
         <p className="text-xs tracking-wide text-slate-400">
-          {product.ip} · {product.category}
+          {[product.ip, product.category, product.country].filter(Boolean).join(" · ")}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <ConditionBadge condition={product.condition} />
           <SaleStatusText status={product.saleStatus} />
           <span className="text-xs text-slate-400">{product.postedLabel}</span>
         </div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{product.title}</h1>
         <p className={`mt-4 text-3xl font-semibold tabular-nums tracking-tight ${sold ? "text-slate-400 line-through" : "text-slate-900"}`}>
-          {product.price > 0 ? formatPrice(product.price) : "가격 미정"}
+          {formatPrice(product.price)}
         </p>
         <p className="mt-2 text-sm text-slate-500">{product.shippingFee === 0 ? "무료배송" : `배송비 ${formatPrice(product.shippingFee)}`} · {product.location}</p>
         <p className="mt-6 text-sm leading-7 text-slate-600">{product.description}</p>
 
         <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
-          <Info label="상태" value={product.condition} />
           <Info label="찜" value={`${product.likes + (wished ? 1 : 0)}`} />
           <Info label="거래 방식" value="Spark 안전결제" />
           <Info label="등록" value={product.postedLabel} />
@@ -91,6 +91,12 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
 
         {reserved ? <p className="mt-4 text-sm text-amber-700">예약 중이에요. 판매자에게 먼저 메시지를 남겨 주세요.</p> : null}
         {sold ? <p className="mt-4 text-sm text-slate-400">판매가 완료된 매물이에요.</p> : null}
+        {product.sellerId === "me" ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href={`/sell/${product.id}`} className={ghostButtonClass}>수정</Link>
+            <DeleteProductButton product={product} onDeleted={() => router.push("/")} />
+          </div>
+        ) : null}
 
         <div className="mt-6 grid gap-2 sm:grid-cols-3">
           <button type="button" className={ghostButtonClass} disabled={sold} onClick={() => addToCart(product.id)}>

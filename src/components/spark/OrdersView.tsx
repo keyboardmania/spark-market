@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { formatPrice, type Order, type OrderStatus } from "@/data/mockData";
-import { ConditionBadge } from "@/components/spark/Badges";
 import { ProductVisual } from "@/components/spark/ProductVisual";
-import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
@@ -23,9 +22,6 @@ export function OrdersView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
-  const [reviewId, setReviewId] = useState<string | null>(null);
-  const [rating, setRating] = useState(5);
-  const [reviewText, setReviewText] = useState("");
 
   if (!mounted) {
     return <div className="mx-auto max-w-4xl px-4 py-8"><div className="h-80 animate-pulse rounded-2xl bg-slate-100" /></div>;
@@ -42,14 +38,6 @@ export function OrdersView() {
     updateOrder(order.id, { status: "거래취소" });
     setConfirmId(null);
     notify("거래를 취소했어요.");
-  }
-
-  function saveReview(order: Order) {
-    if (!reviewText.trim()) return;
-    updateOrder(order.id, { review: { rating, text: reviewText.trim() } });
-    setReviewId(null);
-    setReviewText("");
-    notify("리뷰를 남겼어요.");
   }
 
   return (
@@ -78,7 +66,6 @@ export function OrdersView() {
             const canConfirm = isPurchase && (order.status === "배송중" || order.status === "배송완료");
             const canCancel = order.status === "결제완료";
             const canTrack = Boolean(order.tracking) && order.status !== "거래취소";
-            const canReview = isPurchase && order.status === "구매확정" && !order.review;
             return (
               <li key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex gap-4">
@@ -86,7 +73,6 @@ export function OrdersView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_TONE[order.status]}`}>{order.status}</span>
-                      <ConditionBadge condition={order.condition} />
                       <span className="text-xs text-slate-400">{order.orderedAt}</span>
                     </div>
                     <h2 className="mt-2 text-base font-medium text-slate-900">{order.title}</h2>
@@ -102,7 +88,6 @@ export function OrdersView() {
                     <div><dt className="text-xs text-slate-400">주문번호</dt><dd>{order.id}</dd></div>
                     <div><dt className="text-xs text-slate-400">결제수단</dt><dd>{order.paymentMethod}</dd></div>
                     <div className="sm:col-span-2"><dt className="text-xs text-slate-400">배송지</dt><dd>{order.address}</dd></div>
-                    {order.review ? <div className="sm:col-span-2"><dt className="text-xs text-slate-400">내 리뷰</dt><dd>{"★".repeat(order.review.rating)} {order.review.text}</dd></div> : null}
                   </dl>
                 ) : null}
 
@@ -117,7 +102,6 @@ export function OrdersView() {
                     <button type="button" disabled={!canCancel} onClick={() => setConfirmId(order.id)} className={ghostButtonClass}>거래 취소</button>
                   )}
                   <button type="button" disabled={!canTrack} onClick={() => setTrackingId(trackingId === order.id ? null : order.id)} className={ghostButtonClass}>배송 조회</button>
-                  <button type="button" disabled={!canReview} onClick={() => setReviewId(reviewId === order.id ? null : order.id)} className={ghostButtonClass}>리뷰 남기기</button>
                 </div>
 
                 {trackingId === order.id && order.tracking ? (
@@ -130,26 +114,6 @@ export function OrdersView() {
                       <li className={order.status === "배송완료" || order.status === "구매확정" ? "text-slate-800" : ""}>배송완료</li>
                     </ol>
                   </div>
-                ) : null}
-
-                {reviewId === order.id ? (
-                  <form
-                    className="mt-3 space-y-3 rounded-2xl bg-slate-50 p-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      saveReview(order);
-                    }}
-                  >
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((score) => (
-                        <button key={score} type="button" aria-label={`${score}점`} onClick={() => setRating(score)} className={`h-9 w-9 rounded-full text-sm ${rating >= score ? "bg-slate-900 text-white" : "bg-white text-slate-400"}`}>
-                          {score}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} rows={3} placeholder="거래는 어땠나요?" className={fieldClass} />
-                    <button type="submit" className={primaryButtonClass}>리뷰 등록</button>
-                  </form>
                 ) : null}
               </li>
             );

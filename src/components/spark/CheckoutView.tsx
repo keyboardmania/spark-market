@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatPrice, getSeller, type Product } from "@/data/mockData";
-import { ConditionBadge } from "@/components/spark/Badges";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -13,9 +12,10 @@ const METHODS = ["신용/체크카드", "카카오페이", "네이버페이", "�
 
 export function CheckoutView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const mounted = useMounted();
-  const { products, placeOrder, notify } = useSpark();
+  const { products, placeOrder, notify, isProductDeleted } = useSpark();
+  const deleted = mounted && isProductDeleted(id);
   const live = products.find((product) => product.id === id);
-  const product = initialProduct ?? (mounted ? live : undefined);
+  const product = deleted ? undefined : mounted ? (live ?? initialProduct) : initialProduct;
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [postal, setPostal] = useState("");
@@ -98,10 +98,7 @@ export function CheckoutView({ id, initialProduct }: { id: string; initialProduc
     <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="h-fit rounded-2xl border border-slate-200 p-4 lg:sticky lg:top-28">
         <ProductVisual motif={product.motif} palette={product.palette} ip={product.ip} uid={`pay-${product.id}`} imageUrl={product.imageUrl} alt={product.title} className="aspect-square rounded-2xl" />
-        <div className="mt-4 flex items-center gap-2">
-          <ConditionBadge condition={product.condition} />
-          <span className="text-xs text-slate-400">{product.ip}</span>
-        </div>
+        <p className="mt-4 text-xs text-slate-400">{product.ip}</p>
         <h1 className="mt-2 text-lg font-semibold leading-6 text-slate-900">{product.title}</h1>
         <dl className="mt-4 space-y-2 text-sm">
           <Row label="상품 금액" value={formatPrice(product.price)} />

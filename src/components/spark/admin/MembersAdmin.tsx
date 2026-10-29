@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
+import type { MembershipTier } from "@/data/mockData";
 
 export function MembersAdmin() {
   const { members, setSuspended, admins } = useAdmin();
@@ -15,14 +16,18 @@ export function MembersAdmin() {
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">회원 관리</h1>
         {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
       </div>
-      <Panel title="회원 목록" description="성인 인증, 가입일, 정지 상태를 확인하고 활동을 제한할 수 있어요." flush>
-        <DataTable>
+      <Panel title="회원 목록" description="이메일, 성인 인증, 가입일과 함께 가입국가, 멤버십 등급, 접속 IP, 운영체제 정보를 확인할 수 있어요." flush>
+        <DataTable className="min-w-[1280px]">
           <thead>
             <tr>
               <th className={thClass}>회원</th>
               <th className={thClass}>이메일</th>
               <th className={thClass}>성인인증</th>
               <th className={thClass}>가입일</th>
+              <th className={thClass}>가입국가</th>
+              <th className={thClass}>멤버십 등급</th>
+              <th className={thClass}>회원 IP</th>
+              <th className={thClass}>회원 운영체제(OS) 정보</th>
               <th className={thClass}>상태</th>
               <th className={thClass}>조치</th>
             </tr>
@@ -39,6 +44,12 @@ export function MembersAdmin() {
                   <StatusPill tone={member.adultVerified ? "emerald" : "slate"}>{member.adultVerified ? "완료" : "미인증"}</StatusPill>
                 </td>
                 <td className={`${tdClass} tabular-nums`}>{member.joinedAt}</td>
+                <td className={tdClass}>{member.country}</td>
+                <td className={tdClass}>
+                  <StatusPill tone={membershipTone(member.membership)}>{member.membership}</StatusPill>
+                </td>
+                <td className={`${tdClass} font-mono text-xs tabular-nums`}>{member.ip}</td>
+                <td className={tdClass}>{member.os}</td>
                 <td className={tdClass}>
                   <StatusPill tone={member.suspended ? "rose" : "sky"}>{member.suspended ? "정지" : "정상"}</StatusPill>
                 </td>
@@ -85,4 +96,11 @@ export function MembersAdmin() {
       </Panel>
     </div>
   );
+}
+
+function membershipTone(tier: MembershipTier) {
+  if (tier === "플래티넘") return "sky" as const;
+  if (tier === "골드") return "amber" as const;
+  if (tier === "실버") return "slate" as const;
+  return "emerald" as const;
 }

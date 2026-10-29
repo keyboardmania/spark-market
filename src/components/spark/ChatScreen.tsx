@@ -12,7 +12,7 @@ const EMOJIS = ["✨", "💖", "🧸", "😊", "🙌", "🎀", "😭", "⚡"];
 
 export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const mounted = useMounted();
-  const { rooms, products, typingRoomId, sendMessage, markRead } = useSpark();
+  const { rooms, products, isProductDeleted, typingRoomId, sendMessage, markRead } = useSpark();
   const [activeId, setActiveId] = useState(initialRoomId ?? "room-hinata");
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -23,7 +23,11 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const frameRef = useRef<HTMLDivElement>(null);
 
   const active = rooms.find((room) => room.id === (activeId || initialRoomId)) ?? null;
-  const product = active ? products.find((item) => item.id === active.productId) ?? getProductById(active.productId) : null;
+  const product = active
+    ? isProductDeleted(active.productId)
+      ? null
+      : products.find((item) => item.id === active.productId) ?? getProductById(active.productId)
+    : null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setConnected(true), 700);

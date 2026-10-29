@@ -19,6 +19,11 @@ export function SiteHeader() {
     setQuery("");
   }, [pathname]);
 
+  function signOut() {
+    logout();
+    router.push("/");
+  }
+
   const results = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return [];
@@ -66,7 +71,7 @@ export function SiteHeader() {
             <IconLink href="/chat" label="채팅" badge={unread} />
             <IconLink href="/cart" label="장바구니" badge={cartIds.length} icon="cart" />
             {user ? (
-              <button type="button" onClick={logout} className="hidden rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 lg:inline-flex">
+              <button type="button" onClick={signOut} className="hidden rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 lg:inline-flex">
                 로그아웃
               </button>
             ) : (
@@ -124,7 +129,7 @@ export function SiteHeader() {
             <MenuLink href="/cart">장바구니</MenuLink>
             <MenuLink href="/mypage">마이페이지</MenuLink>
             {user ? (
-              <button type="button" onClick={logout} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
+              <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
                 로그아웃
               </button>
             ) : (

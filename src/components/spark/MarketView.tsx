@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  GRADE_FILTERS,
   IP_FILTERS,
   PRODUCTS,
   categoryHref,
   formatPrice,
   type CategoryFilter,
-  type GradeFilter,
   type IpFilter,
   type Product,
 } from "@/data/mockData";
@@ -30,7 +28,6 @@ type SortId = (typeof SORTS)[number]["id"];
 export function MarketView({ category }: { category: CategoryFilter }) {
   const { products } = useSpark();
   const mounted = useMounted();
-  const [grade, setGrade] = useState<GradeFilter>("전체");
   const [ip, setIp] = useState<IpFilter>("전체");
   const [sort, setSort] = useState<SortId>("new");
   const source = mounted ? products : PRODUCTS;
@@ -38,16 +35,15 @@ export function MarketView({ category }: { category: CategoryFilter }) {
   const filtered = useMemo(() => {
     const next = source.filter((product) => {
       if (category !== "전체" && product.category !== category) return false;
-      if (grade !== "전체" && product.condition !== grade) return false;
       if (ip !== "전체" && product.ip !== ip) return false;
       return true;
     });
     return [...next].sort((a, b) => compareProducts(a, b, sort));
-  }, [category, grade, ip, sort, source]);
+  }, [category, ip, sort, source]);
 
-  const featured = PRODUCTS.filter((product) =>
-    ["pkmn-charizard-psa10", "chii-secret-plush", "sanrio-cinnamoroll"].includes(product.id),
-  );
+  const featured = ["pkmn-charizard-psa10", "chii-secret-plush", "sanrio-cinnamoroll"]
+    .map((id) => source.find((product) => product.id === id))
+    .filter((product) => product !== undefined);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -61,7 +57,7 @@ export function MarketView({ category }: { category: CategoryFilter }) {
               <span className="mt-1 block font-serif text-[2.6rem] font-medium italic leading-none text-slate-800 sm:text-6xl">Spark.</span>
             </h1>
             <p className="mt-5 max-w-md text-sm leading-6 text-slate-500">
-              하이큐!!, 블리치, 산리오, 포켓몬, 먼작귀. 등급과 상태가 또렷한 매물만 하얀 선반 위에 올려 두었어요.
+              하이큐!!, 블리치, 산리오, 포켓몬, 먼작귀. 하얀 선반 위에 매물을 올려 두었어요.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <Link href="/sell" className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white">
@@ -96,7 +92,7 @@ export function MarketView({ category }: { category: CategoryFilter }) {
         <section>
           <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">CATEGORY</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{category}</h1>
-          <p className="mt-2 text-sm text-slate-500">등급과 작품으로 한 번 더 골라 보세요.</p>
+          <p className="mt-2 text-sm text-slate-500">작품으로 한 번 더 골라 보세요.</p>
         </section>
       )}
 
@@ -116,14 +112,6 @@ export function MarketView({ category }: { category: CategoryFilter }) {
           ))}
         </FilterRow>
 
-        <FilterRow label="등급">
-          {GRADE_FILTERS.map((item) => (
-            <button key={item} type="button" aria-pressed={grade === item} onClick={() => setGrade(item)} className={pillClass(grade === item)}>
-              {item === "전체" ? "전체 등급" : item}
-            </button>
-          ))}
-        </FilterRow>
-
         <FilterRow label="작품">
           {IP_FILTERS.map((item) => (
             <button key={item} type="button" aria-pressed={ip === item} onClick={() => setIp(item)} className={pillClass(ip === item)}>
@@ -134,8 +122,7 @@ export function MarketView({ category }: { category: CategoryFilter }) {
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <p className="text-sm text-slate-500">
-            {category === "전체" ? "전체" : category}
-            {grade !== "전체" ? ` · ${grade}` : ""} · {filtered.length}개
+            {category === "전체" ? "전체" : category} · {filtered.length}개
           </p>
           <label className="flex items-center gap-2 text-sm text-slate-500">
             정렬

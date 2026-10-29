@@ -2,6 +2,9 @@ export const CATEGORIES = ["TCG", "피규어", "산리오/굿즈"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type CategoryFilter = "전체" | Category;
 
+export const ORIGINS = ["한국", "일본", "미국", "중국", "유럽"] as const;
+export type Origin = (typeof ORIGINS)[number];
+
 export const CATEGORY_ROUTES = [
   { slug: "tcg", label: "TCG" },
   { slug: "figure", label: "피규어" },
@@ -42,11 +45,19 @@ export type Seller = {
   city: string;
 };
 
+export type ProductMedia = {
+  id: string;
+  name: string;
+  kind: "image" | "video";
+  url: string;
+};
+
 export type Product = {
   id: string;
   title: string;
   ip: IpName | string;
   category: Category;
+  country?: Origin;
   price: number;
   condition: Condition;
   saleStatus: SaleStatus;
@@ -60,13 +71,22 @@ export type Product = {
   postedOrder: number;
   postedLabel: string;
   imageUrl?: string;
+  media?: ProductMedia[];
 };
 
 export type SparkUser = {
   name: string;
   email: string;
-  provider: "email" | "kakao" | "naver" | "apple";
+  provider: "email" | "line" | "google" | "x" | "apple";
 };
+
+const NICKNAME_PREFIXES = ["컬렉터", "Spark", "수집가", "선반"] as const;
+
+export function createNickname() {
+  const prefix = NICKNAME_PREFIXES[Math.floor(Math.random() * NICKNAME_PREFIXES.length)];
+  const number = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}#${number}`;
+}
 
 export type ChatMessage = {
   id: string;
@@ -720,26 +740,54 @@ export const ADMIN_ACCOUNTS: AdminAccount[] = [
   { id: "admin-cs", name: "린", email: "rin@spark.market", role: "고객지원", lastSeen: "2026.10.26 22:15" },
 ];
 
+export type MembershipTier = "스파크" | "실버" | "골드" | "플래티넘";
+
 export type AdminMember = {
   id: string;
   name: string;
   email: string;
   adultVerified: boolean;
   joinedAt: string;
+  country: string;
+  membership: MembershipTier;
+  ip: string;
+  os: string;
   suspended: boolean;
   reports: number;
 };
 
 export const ADMIN_MEMBERS: AdminMember[] = [
-  { id: "mem-seoyeon", name: "김서연", email: "seoyeon@spark.market", adultVerified: true, joinedAt: "2026.10.27", suspended: false, reports: 0 },
-  { id: "mem-minji", name: "박민지", email: "minji@spark.market", adultVerified: false, joinedAt: "2026.10.27", suspended: false, reports: 0 },
-  { id: "mem-haru", name: "하루", email: "haru.court@spark.market", adultVerified: true, joinedAt: "2024.03.12", suspended: false, reports: 0 },
-  { id: "mem-momo", name: "모모", email: "momo.ribbon@spark.market", adultVerified: true, joinedAt: "2024.11.02", suspended: false, reports: 0 },
-  { id: "mem-slab", name: "카드서랍", email: "slab.drawer@spark.market", adultVerified: true, joinedAt: "2025.01.19", suspended: false, reports: 1 },
-  { id: "mem-chii", name: "치이", email: "chii.pocket@spark.market", adultVerified: true, joinedAt: "2023.08.30", suspended: false, reports: 0 },
-  { id: "mem-orange", name: "오렌지코트", email: "orange.coat@spark.market", adultVerified: true, joinedAt: "2025.06.14", suspended: true, reports: 2 },
-  { id: "mem-sora", name: "소라", email: "sora@spark.market", adultVerified: false, joinedAt: "2026.09.03", suspended: false, reports: 0 },
+  { id: "mem-seoyeon", name: "김서연", email: "seoyeon@spark.market", adultVerified: true, joinedAt: "2026.10.27", country: "한국", membership: "골드", ip: "211.234.18.42", os: "Windows 11 · Chrome 131", suspended: false, reports: 0 },
+  { id: "mem-minji", name: "박민지", email: "minji@spark.market", adultVerified: false, joinedAt: "2026.10.27", country: "한국", membership: "스파크", ip: "121.140.72.15", os: "iOS 18.2 · Safari", suspended: false, reports: 0 },
+  { id: "mem-haru", name: "하루", email: "haru.court@spark.market", adultVerified: true, joinedAt: "2024.03.12", country: "일본", membership: "플래티넘", ip: "126.102.44.9", os: "macOS 15.1 · Safari", suspended: false, reports: 0 },
+  { id: "mem-momo", name: "모모", email: "momo.ribbon@spark.market", adultVerified: true, joinedAt: "2024.11.02", country: "일본", membership: "골드", ip: "133.32.18.77", os: "Android 15 · Chrome", suspended: false, reports: 0 },
+  { id: "mem-slab", name: "카드서랍", email: "slab.drawer@spark.market", adultVerified: true, joinedAt: "2025.01.19", country: "미국", membership: "실버", ip: "104.28.91.6", os: "Windows 10 · Edge 131", suspended: false, reports: 1 },
+  { id: "mem-chii", name: "치이", email: "chii.pocket@spark.market", adultVerified: true, joinedAt: "2023.08.30", country: "한국", membership: "플래티넘", ip: "175.223.40.118", os: "iPadOS 18.1 · Safari", suspended: false, reports: 0 },
+  { id: "mem-orange", name: "오렌지코트", email: "orange.coat@spark.market", adultVerified: true, joinedAt: "2025.06.14", country: "미국", membership: "스파크", ip: "172.56.11.203", os: "Android 14 · Samsung Internet", suspended: true, reports: 2 },
+  { id: "mem-sora", name: "소라", email: "sora@spark.market", adultVerified: false, joinedAt: "2026.09.03", country: "중국", membership: "실버", ip: "39.7.22.154", os: "macOS 14.6 · Chrome 130", suspended: false, reports: 0 },
 ];
+
+export const ADDRESS_LIMIT = 10;
+export const ADDRESS_LIMIT_MESSAGE = "다른 주소를 삭제 후 등록하세요.";
+
+export type ShippingAddress = {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  detail: string;
+  postalCode: string;
+  isDefault: boolean;
+};
+
+export type AddressDraft = {
+  name: string;
+  phone: string;
+  address: string;
+  detail: string;
+  postalCode: string;
+  isDefault: boolean;
+};
 
 export type AdminCategory = {
   id: string;

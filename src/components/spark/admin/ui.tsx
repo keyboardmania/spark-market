@@ -48,10 +48,10 @@ export function StatusPill({ children, tone = "slate" }: { children: ReactNode; 
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-export function DataTable({ children, wide = true }: { children: ReactNode; wide?: boolean }) {
+export function DataTable({ children, wide = true, className = "" }: { children: ReactNode; wide?: boolean; className?: string }) {
   return (
     <div className="overflow-x-auto">
-      <table className={`w-full text-left text-sm ${wide ? "min-w-[720px]" : ""}`}>{children}</table>
+      <table className={`w-full text-left text-sm ${className || (wide ? "min-w-[720px]" : "")}`}>{children}</table>
     </div>
   );
 }
