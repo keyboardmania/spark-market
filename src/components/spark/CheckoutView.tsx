@@ -8,7 +8,7 @@ import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/s
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-const METHODS = ["신용/체크카드", "카카오페이", "네이버페이", "토스페이", "무통장입금"] as const;
+const METHODS = ["신용/체크카드", "휴대폰 결제", "PayPal", "Apple Pay", "Google Pay"] as const;
 
 export function CheckoutView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const mounted = useMounted();
