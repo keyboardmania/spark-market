@@ -78,6 +78,7 @@ export type SparkUser = {
   name: string;
   email: string;
   provider: "email" | "line" | "google" | "x" | "apple";
+  membership?: "vip";
 };
 
 const NICKNAME_PREFIXES = ["컬렉터", "Spark", "수집가", "선반"] as const;
@@ -92,6 +93,8 @@ export type ChatMessage = {
   id: string;
   sender: "me" | "seller";
   text?: string;
+  originalText?: string;
+  translatedText?: string;
   imageUrl?: string;
   at: string;
 };
@@ -108,6 +111,16 @@ export type ChatRoom = {
 export const ORDER_STATUSES = ["결제완료", "배송중", "배송완료", "구매확정", "거래취소"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+export const CANCEL_REASONS = ["단순 변심", "상품 정보와 다름", "배송 지연", "판매자와 협의", "기타"] as const;
+export type CancelReason = (typeof CANCEL_REASONS)[number];
+
+export type CancelRequest = {
+  reason: string;
+  detail: string;
+  requestedAt: string;
+  autoCancelled?: boolean;
+};
+
 export type Order = {
   id: string;
   role: "purchase" | "sale";
@@ -115,6 +128,7 @@ export type Order = {
   title: string;
   ip: string;
   price: number;
+  quantity?: number;
   condition: Condition;
   motif: Motif;
   palette: Palette;
@@ -126,6 +140,7 @@ export type Order = {
   paymentMethod: string;
   tracking: string | null;
   review: { rating: number; text: string } | null;
+  cancelRequest?: CancelRequest;
 };
 
 export const SELLERS: Seller[] = [
@@ -308,7 +323,7 @@ export const PRODUCTS: Product[] = [
     saleStatus: "판매중",
     description:
       "보호 필름을 붙인 채 보관했습니다. 모서리 흰색 벗겨짐이 없고, 받침대 포함입니다. 소량 먼지는 출고 전에 정리해요.",
-    sellerId: "orange",
+    sellerId: "me",
     likes: 44,
     motif: "pouch",
     palette: bleach,
@@ -548,6 +563,23 @@ export const CHAT_ROOMS: ChatRoom[] = [
     ],
   },
   {
+    id: "room-rukia-sale",
+    productId: "bl-rukia-stand",
+    sellerName: "소라",
+    sellerHandle: "@sora",
+    unread: 1,
+    messages: [
+      {
+        id: "m-rukia-en",
+        sender: "seller",
+        originalText: "Hi friend, is this card in really good condition?",
+        translatedText: "안녕하세요 친구, 이 카드 상태가 진짜 좋습니까?",
+        text: "안녕하세요 친구, 이 카드 상태가 진짜 좋습니까?",
+        at: "오후 7:46",
+      },
+    ],
+  },
+  {
     id: "room-charizard",
     productId: "pkmn-charizard-psa10",
     sellerName: "카드서랍",
@@ -688,6 +720,31 @@ export const ORDERS: Order[] = [
     tracking: "SPK3845510",
     review: null,
   },
+  {
+    id: "SPK-240050",
+    role: "purchase",
+    productId: "chii-usagi-mini",
+    title: "먼작귀 우사기 미니 피규어",
+    ip: "먼작귀",
+    price: 18000,
+    quantity: 1,
+    condition: "S급",
+    motif: "figure",
+    palette: usagi,
+    imageUrl: "https://cdn.011st.com/11dims/resize/600x600/quality/75/11src/product/9685761281/B.jpg?675239897",
+    status: "결제완료",
+    orderedAt: "2026.10.18",
+    counterpart: "치이",
+    address: "서울특별시 성동구 연무장길 12, 4층",
+    paymentMethod: "신용/체크카드",
+    tracking: null,
+    review: null,
+    cancelRequest: {
+      reason: "배송 지연",
+      detail: "약속한 출고일이 지났는데 송장이 없습니다.",
+      requestedAt: "2026-10-20T00:00:00+09:00",
+    },
+  },
 ];
 
 export const SELLER_REPLIES = [
@@ -713,8 +770,18 @@ export function getSeller(id: string) {
   return SELLERS.find((seller) => seller.id === id) ?? SELLERS[0];
 }
 
+/** Stored product amounts use a won scale. Drop three zeros when showing dollars. Membership prices stay on their own formatter. */
+export const STORED_PRICE_PER_DOLLAR = 1000;
+
 export function formatPrice(price: number) {
-  return `${new Intl.NumberFormat("ko-KR").format(price)}원`;
+  const dollars = Math.round((price / STORED_PRICE_PER_DOLLAR) * 100) / 100;
+  const hasCents = Math.abs(dollars % 1) > 0.001;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(dollars);
 }
 
 export function formatTime(date = new Date()) {
@@ -825,7 +892,7 @@ export const ADMIN_TRADES: AdminTrade[] = [
   { id: "SPK-240221", title: "산리오 헬로키티 빈티지 파우치", buyer: "김서연", seller: "모모", amount: 36000, status: "결제완료", orderedAt: "2026.10.26" },
   { id: "SPK-240198", title: "포켓몬 이브이 프로모 카드", buyer: "김서연", seller: "카드서랍", amount: 47000, status: "배송중", orderedAt: "2026.10.24" },
   { id: "SPK-240144", title: "하이큐!! 카라스노 유니폼 카드 BGS 9.5", buyer: "김서연", seller: "카드서랍", amount: 74000, status: "배송완료", orderedAt: "2026.10.20" },
-  { id: "SPK-239880", title: "블리치 루키아 아크릴 스탠드", buyer: "소라", seller: "오렌지코트", amount: 28000, status: "분쟁", orderedAt: "2026.10.23" },
+  { id: "SPK-239880", title: "블리치 루키아 아크릴 스탠드", buyer: "소라", seller: "나", amount: 28000, status: "분쟁", orderedAt: "2026.10.23" },
   { id: "SPK-240090", title: "먼작귀 우사기 미니 피규어", buyer: "김서연", seller: "치이", amount: 32000, status: "구매확정", orderedAt: "2026.10.12" },
 ];
 

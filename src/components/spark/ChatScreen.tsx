@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { formatPrice, getProductById, type Product } from "@/data/mockData";
+import { formatPrice, getProductById, type ChatMessage, type Product } from "@/data/mockData";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -116,12 +116,12 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                     className={`flex w-full flex-col gap-1 px-4 py-3 text-left ${selected ? "bg-slate-50" : "hover:bg-slate-50/70"}`}
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-900">{room.sellerName}</span>
+                      <span className="text-sm font-medium text-slate-900">{roomTitle(room, products)}</span>
                       {room.unread > 0 ? (
                         <span className="rounded-full bg-rose-400 px-1.5 text-[10px] leading-4 text-white">{room.unread}</span>
                       ) : null}
                     </span>
-                    <span className="line-clamp-1 text-xs text-slate-400">{last?.imageUrl ? "사진" : last?.text}</span>
+                    <span className="line-clamp-1 text-xs text-slate-400">{previewText(last)}</span>
                   </button>
                 </li>
               );
@@ -137,7 +137,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                   목록
                 </button>
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{active.sellerName}</p>
+                  <p className="text-sm font-medium text-slate-900">{roomTitle(active, products)}</p>
                   <p className="text-xs text-slate-400">{active.sellerHandle}</p>
                 </div>
               </header>
@@ -146,15 +146,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
               </div>
               <div ref={threadRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/40 px-4 py-4">
                 {active.messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.sender === "me" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[78%] ${message.sender === "me" ? "items-end" : "items-start"} flex flex-col gap-1`}>
-                      <div className={`overflow-hidden rounded-2xl px-3 py-2 text-sm leading-6 ${message.sender === "me" ? "rounded-br-md bg-slate-900 text-white" : "rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200"}`}>
-                        {message.imageUrl ? <img src={message.imageUrl} alt="첨부 이미지" className="mb-2 max-h-48 rounded-xl object-cover" /> : null}
-                        {message.text}
-                      </div>
-                      <span className="text-[10px] text-slate-400">{message.at}</span>
-                    </div>
-                  </div>
+                  <MessageBubble key={message.id} message={message} />
                 ))}
                 {typingRoomId === active.id ? <p className="text-xs text-slate-400">상대방이 입력 중이에요.</p> : null}
               </div>
@@ -193,6 +185,79 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
             <div className="grid flex-1 place-items-center text-sm text-slate-400">대화방을 선택해 주세요.</div>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+function roomTitle(room: { productId: string; sellerName: string }, products: Product[]) {
+  const product = products.find((item) => item.id === room.productId);
+  return product?.sellerId === "me" ? `구매자 ${room.sellerName}` : room.sellerName;
+}
+
+function previewText(message?: ChatMessage) {
+  if (!message) return "";
+  if (message.imageUrl && !message.translatedText && !message.text) return "사진";
+  return message.translatedText ?? message.text ?? "";
+}
+
+export function ProductInquiry({ productId, compact = false }: { productId: string; compact?: boolean }) {
+  const { rooms } = useSpark();
+  const room = rooms.find(
+    (item) => item.productId === productId && item.messages.some((message) => message.originalText && message.translatedText),
+  );
+  if (!room) return null;
+  const messages = compact ? room.messages.filter((message) => message.originalText && message.translatedText) : room.messages;
+
+  return (
+    <section
+      className={
+        compact
+          ? "min-w-0 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
+          : "rounded-2xl border border-slate-200 p-4"
+      }
+    >
+      <div className={`flex min-w-0 items-center justify-between gap-2 ${compact ? "mb-2" : "mb-3"}`}>
+        <h2 className={`min-w-0 truncate font-medium text-slate-900 ${compact ? "text-xs" : "text-sm"}`}>
+          구매자 문의 · {room.sellerName}
+        </h2>
+        <Link href={`/chat/${room.id}`} className="shrink-0 text-[11px] font-medium text-slate-500 hover:text-slate-800">
+          채팅 열기
+        </Link>
+      </div>
+      <div className={compact ? "max-h-40 min-w-0 space-y-2 overflow-y-auto" : "space-y-3"}>
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} compact={compact} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MessageBubble({ message, compact = false }: { message: ChatMessage; compact?: boolean }) {
+  const canTranslate = message.sender !== "me" && Boolean(message.originalText && message.translatedText);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const body = canTranslate ? (showOriginal ? message.originalText : message.translatedText) : message.text;
+  const mine = message.sender === "me";
+
+  return (
+    <div className={`flex min-w-0 ${mine ? "justify-end" : "justify-start"}`}>
+      <div className={`flex min-w-0 flex-col gap-1 ${compact ? "max-w-full" : "max-w-[78%]"} ${mine ? "items-end" : "items-start"}`}>
+        <div className={`overflow-hidden break-words rounded-2xl px-3 py-2 leading-6 ${compact ? "text-xs" : "text-sm"} ${mine ? "rounded-br-md bg-slate-900 text-white" : "rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200"}`}>
+          {message.imageUrl ? <img src={message.imageUrl} alt="첨부 이미지" className={`mb-2 w-full rounded-xl object-cover ${compact ? "max-h-28" : "max-h-48"}`} /> : null}
+          {body}
+        </div>
+        {canTranslate ? (
+          <button
+            type="button"
+            aria-pressed={showOriginal}
+            onClick={() => setShowOriginal((current) => !current)}
+            className="text-[11px] font-medium text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline"
+          >
+            {showOriginal ? "Translate" : "원문 보기"}
+          </button>
+        ) : null}
+        <span className="text-[10px] text-slate-400">{message.at}</span>
       </div>
     </div>
   );

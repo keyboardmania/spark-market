@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { formatPrice, type Order, type OrderStatus } from "@/data/mockData";
+import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-const STATUS_TONE: Record<OrderStatus, string> = {
+export const ORDER_STATUS_TONE: Record<OrderStatus, string> = {
   결제완료: "bg-slate-100 text-slate-600",
   배송중: "bg-sky-50 text-sky-700",
   배송완료: "bg-amber-50 text-amber-800",
@@ -19,8 +21,6 @@ export function OrdersView() {
   const mounted = useMounted();
   const { orders, updateOrder, notify } = useSpark();
   const [tab, setTab] = useState<"purchase" | "sale">("purchase");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
 
   if (!mounted) {
@@ -32,12 +32,6 @@ export function OrdersView() {
   function confirmPurchase(order: Order) {
     updateOrder(order.id, { status: "구매확정" });
     notify("구매를 확정했어요.");
-  }
-
-  function cancelOrder(order: Order) {
-    updateOrder(order.id, { status: "거래취소" });
-    setConfirmId(null);
-    notify("거래를 취소했어요.");
   }
 
   return (
@@ -64,43 +58,37 @@ export function OrdersView() {
           {visible.map((order) => {
             const isPurchase = order.role === "purchase";
             const canConfirm = isPurchase && (order.status === "배송중" || order.status === "배송완료");
-            const canCancel = order.status === "결제완료";
+            const canLinkCancel = order.status !== "구매확정" && order.status !== "거래취소";
             const canTrack = Boolean(order.tracking) && order.status !== "거래취소";
             return (
               <li key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex gap-4">
-                  <ProductVisual motif={order.motif} palette={order.palette} ip={order.ip} uid={order.id} imageUrl={order.imageUrl} alt="" className="h-24 w-24 shrink-0 rounded-xl" />
+                  <Link href={`/orders/${order.id}`} className="shrink-0 rounded-xl">
+                    <ProductVisual motif={order.motif} palette={order.palette} ip={order.ip} uid={order.id} imageUrl={order.imageUrl} alt="" className="h-24 w-24 rounded-xl" />
+                  </Link>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${STATUS_TONE[order.status]}`}>{order.status}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${ORDER_STATUS_TONE[order.status]}`}>{order.status}</span>
                       <span className="text-xs text-slate-400">{order.orderedAt}</span>
                     </div>
-                    <h2 className="mt-2 text-base font-medium text-slate-900">{order.title}</h2>
+                    <h2 className="mt-2 text-base font-medium text-slate-900">
+                      <Link href={`/orders/${order.id}`} className="hover:underline">{order.title}</Link>
+                    </h2>
                     <p className="mt-1 text-sm text-slate-500">{isPurchase ? "판매자" : "구매자"} {order.counterpart} · {formatPrice(order.price)}</p>
-                    <button type="button" onClick={() => setOpenId(openId === order.id ? null : order.id)} className="mt-2 text-xs text-slate-400 underline-offset-4 hover:underline">
-                      {openId === order.id ? "상세 접기" : "상세 정보"}
-                    </button>
                   </div>
                 </div>
 
-                {openId === order.id ? (
-                  <dl className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-2">
-                    <div><dt className="text-xs text-slate-400">주문번호</dt><dd>{order.id}</dd></div>
-                    <div><dt className="text-xs text-slate-400">결제수단</dt><dd>{order.paymentMethod}</dd></div>
-                    <div className="sm:col-span-2"><dt className="text-xs text-slate-400">배송지</dt><dd>{order.address}</dd></div>
-                  </dl>
-                ) : null}
+                {isPurchase ? null : (
+                  <div className="mt-4">
+                    <ProductInquiry productId={order.productId} compact />
+                  </div>
+                )}
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" disabled={!canConfirm} onClick={() => confirmPurchase(order)} className={primaryButtonClass}>구매 확정</button>
-                  {confirmId === order.id ? (
-                    <>
-                      <button type="button" onClick={() => cancelOrder(order)} className={ghostButtonClass}>취소 확정</button>
-                      <button type="button" onClick={() => setConfirmId(null)} className={ghostButtonClass}>돌아가기</button>
-                    </>
-                  ) : (
-                    <button type="button" disabled={!canCancel} onClick={() => setConfirmId(order.id)} className={ghostButtonClass}>거래 취소</button>
-                  )}
+                  {canLinkCancel ? (
+                    <Link href={`/orders/${order.id}?cancel=1`} className={ghostButtonClass}>거래 취소</Link>
+                  ) : null}
                   <button type="button" disabled={!canTrack} onClick={() => setTrackingId(trackingId === order.id ? null : order.id)} className={ghostButtonClass}>배송 조회</button>
                 </div>
 

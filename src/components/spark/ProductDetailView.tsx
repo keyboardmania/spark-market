@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice, getSeller, type Product } from "@/data/mockData";
 import { SaleStatusText } from "@/components/spark/Badges";
+import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { DeleteProductButton } from "@/components/spark/SellForm";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
@@ -13,7 +14,7 @@ import { useMounted } from "@/components/spark/useMounted";
 export function ProductDetailView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const router = useRouter();
   const mounted = useMounted();
-  const { products, user, wishlistIds, toggleWishlist, addToCart, ensureRoom, isProductDeleted } = useSpark();
+  const { products, user, wishlistIds, toggleWishlist, addToCart, ensureRoom, rooms, isProductDeleted } = useSpark();
   const deleted = mounted && isProductDeleted(id);
   const live = products.find((product) => product.id === id);
   const product = deleted ? undefined : mounted ? (live ?? initialProduct) : initialProduct;
@@ -36,6 +37,8 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
   const seller = getSeller(product.sellerId);
   const sellerName = seller.id === "me" && user ? user.name : seller.name;
   const wished = mounted && wishlistIds.includes(product.id);
+  const mine = product.sellerId === "me";
+  const saleRoom = mine ? rooms.find((room) => room.productId === product.id) : undefined;
   const sold = product.saleStatus === "판매완료";
   const reserved = product.saleStatus === "예약중";
   const canBuy = product.saleStatus === "판매중" && product.price > 0;
@@ -89,6 +92,12 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
           <p className="mt-2 text-xs text-slate-400">{seller.city}</p>
         </section>
 
+        {mine && saleRoom?.messages.some((message) => message.originalText && message.translatedText) ? (
+          <div className="mt-6">
+            <ProductInquiry productId={product.id} />
+          </div>
+        ) : null}
+
         {reserved ? <p className="mt-4 text-sm text-amber-700">예약 중이에요. 판매자에게 먼저 메시지를 남겨 주세요.</p> : null}
         {sold ? <p className="mt-4 text-sm text-slate-400">판매가 완료된 매물이에요.</p> : null}
         {product.sellerId === "me" ? (
@@ -102,16 +111,22 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
           <button type="button" className={ghostButtonClass} disabled={sold} onClick={() => addToCart(product.id)}>
             장바구니 담기
           </button>
-          <button
-            type="button"
-            className={ghostButtonClass}
-            onClick={() => {
-              const roomId = ensureRoom(product);
-              router.push(`/chat/${roomId}`);
-            }}
-          >
-            1:1 채팅
-          </button>
+          {mine && saleRoom ? (
+            <Link href={`/chat/${saleRoom.id}`} className={ghostButtonClass}>
+              구매자 채팅
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className={ghostButtonClass}
+              onClick={() => {
+                const roomId = ensureRoom(product);
+                router.push(`/chat/${roomId}`);
+              }}
+            >
+              1:1 채팅
+            </button>
+          )}
           <button
             type="button"
             className={primaryButtonClass}

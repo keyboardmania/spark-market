@@ -68,6 +68,9 @@ export function SiteHeader() {
             <Link href="/sell" className="hidden rounded-full px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex">
               판매하기
             </Link>
+            <Link href="/membership" className="hidden rounded-full px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex">
+              멤버십
+            </Link>
             <IconLink href="/chat" label="채팅" badge={unread} />
             <IconLink href="/cart" label="장바구니" badge={cartIds.length} icon="cart" />
             {user ? (
@@ -124,6 +127,7 @@ export function SiteHeader() {
         <div className="border-t border-slate-100 bg-white px-4 py-3 lg:hidden">
           <div className="mx-auto grid max-w-6xl gap-1">
             <MenuLink href="/sell">판매하기</MenuLink>
+            <MenuLink href="/membership">멤버십</MenuLink>
             <MenuLink href="/orders">구매/판매 내역</MenuLink>
             <MenuLink href="/chat">1:1 채팅</MenuLink>
             <MenuLink href="/cart">장바구니</MenuLink>

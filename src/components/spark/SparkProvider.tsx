@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ADDRESS_LIMIT,
   CHAT_ROOMS,
@@ -23,6 +23,7 @@ type StoredAccount = {
   email: string;
   password: string;
   provider: SparkUser["provider"];
+  membership?: SparkUser["membership"];
 };
 
 const RESERVED_EMAILS = new Set(["taken@spark.market"]);
@@ -35,6 +36,7 @@ type SparkContextValue = {
   findAccount: (email: string) => SparkUser | null;
   registerAccount: (account: StoredAccount) => void;
   authenticate: (email: string, password: string) => SparkUser | null;
+  activateMembership: () => boolean;
   cartIds: string[];
   addToCart: (id: string) => void;
   removeFromCart: (id: string) => void;
@@ -53,6 +55,7 @@ type SparkContextValue = {
   orders: Order[];
   placeOrder: (order: Order) => void;
   updateOrder: (id: string, patch: Partial<Order>) => void;
+  requestCancel: (id: string, reason: string, detail: string) => void;
   rooms: ChatRoom[];
   typingRoomId: string | null;
   ensureRoom: (product: Product) => string;
@@ -62,6 +65,24 @@ type SparkContextValue = {
 };
 
 const SparkContext = createContext<SparkContextValue | null>(null);
+const CANCEL_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+function expireCancelRequests(orders: Order[], now = Date.now()) {
+  let changed = false;
+  const next = orders.map((order) => {
+    const request = order.cancelRequest;
+    if (!request || request.autoCancelled || order.status === "거래취소") return order;
+    const requestedAt = new Date(request.requestedAt).getTime();
+    if (Number.isNaN(requestedAt) || requestedAt + CANCEL_WINDOW_MS > now) return order;
+    changed = true;
+    return {
+      ...order,
+      status: "거래취소" as const,
+      cancelRequest: { ...request, autoCancelled: true },
+    };
+  });
+  return changed ? next : orders;
+}
 
 export function SparkProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SparkUser | null>(null);
@@ -116,7 +137,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       const key = email.trim().toLowerCase();
       const found = accounts.find((account) => account.email.toLowerCase() === key);
       if (!found) return null;
-      return { name: found.name, email: found.email, provider: found.provider };
+      return { name: found.name, email: found.email, provider: found.provider, membership: found.membership };
     },
     [accounts],
   );
@@ -135,10 +156,20 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       const key = email.trim().toLowerCase();
       const found = accounts.find((account) => account.email.toLowerCase() === key);
       if (!found || found.provider !== "email" || !found.password || found.password !== password) return null;
-      return { name: found.name, email: found.email, provider: "email" };
+      return { name: found.name, email: found.email, provider: "email", membership: found.membership };
     },
     [accounts],
   );
+
+  const activateMembership = useCallback(() => {
+    if (!user) return false;
+    const key = user.email.trim().toLowerCase();
+    setUser({ ...user, membership: "vip" });
+    setAccounts((current) =>
+      current.map((account) => (account.email.toLowerCase() === key ? { ...account, membership: "vip" } : account)),
+    );
+    return true;
+  }, [user]);
 
   const addToCart = useCallback(
     (id: string) => {
@@ -269,6 +300,30 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     setOrders((current) => current.map((order) => (order.id === id ? { ...order, ...patch } : order)));
   }, []);
 
+  const requestCancel = useCallback((id: string, reason: string, detail: string) => {
+    setOrders((current) => {
+      const target = current.find((order) => order.id === id);
+      if (!target || target.cancelRequest) return current;
+      if (target.status !== "결제완료" && target.status !== "배송완료") return current;
+      return current.map((order) =>
+        order.id === id
+          ? {
+              ...order,
+              cancelRequest: {
+                reason,
+                detail,
+                requestedAt: new Date().toISOString(),
+              },
+            }
+          : order,
+      );
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    setOrders((current) => expireCancelRequests(current));
+  }, [orders]);
+
   const ensureRoom = useCallback((product: Product) => {
     const seller = getSeller(product.sellerId);
     const existing = rooms.find((room) => room.productId === product.id);
@@ -344,6 +399,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     findAccount,
     registerAccount,
     authenticate,
+    activateMembership,
     cartIds,
     addToCart,
     removeFromCart,
@@ -362,6 +418,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     orders,
     placeOrder,
     updateOrder,
+    requestCancel,
     rooms,
     typingRoomId,
     ensureRoom,

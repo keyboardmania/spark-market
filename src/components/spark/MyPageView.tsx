@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AddressBook } from "@/components/spark/AddressBook";
+import { SparkVipBadge } from "@/components/spark/Badges";
 import { ProductCard } from "@/components/spark/ProductCard";
-import { ghostButtonClass } from "@/components/spark/styles";
+import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 import type { SparkUser } from "@/data/mockData";
@@ -26,6 +27,12 @@ export function MyPageView() {
         <p className="mt-2 text-sm text-slate-500">
           {mounted && user ? `${user.email} · ${providerLabel(user.provider)}` : "로그인하면 거래와 배송지가 이 화면에 모여요."}
         </p>
+        {mounted && user?.membership === "vip" ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <SparkVipBadge />
+            <span className="text-sm text-slate-600">멤버십 회원</span>
+          </div>
+        ) : null}
         <div className="mt-5 flex flex-wrap gap-2">
           {mounted && user ? (
             <button
@@ -44,6 +51,9 @@ export function MyPageView() {
               <Link href="/signup" className="rounded-full bg-slate-900 px-5 py-3 text-sm font-medium text-white">회원가입</Link>
             </>
           )}
+          {mounted && user?.membership !== "vip" ? (
+            <Link href="/membership" className={user ? primaryButtonClass : ghostButtonClass}>Spark VIP 가입</Link>
+          ) : null}
         </div>
         <dl className="mt-6 grid grid-cols-3 gap-3">
           <Stat label="장바구니" value={mounted ? String(cartIds.length) : "0"} />

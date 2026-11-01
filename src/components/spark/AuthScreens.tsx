@@ -8,6 +8,8 @@ import { useSpark } from "@/components/spark/SparkProvider";
 import { createNickname, type SparkUser } from "@/data/mockData";
 
 const LOGIN_ERROR = "이메일 또는 비밀번호가 올바르지 않습니다.";
+const TEST_VERIFICATION_CODE = "5825";
+const VERIFICATION_SENT = "인증번호가 발송되었습니다. (테스트 번호: 5825)";
 
 const SOCIAL_PROVIDERS = [
   { id: "line" as const, label: "LINE으로 계속하기", name: "LINE", className: "bg-[#06C755] text-white", mark: "L" },
@@ -110,12 +112,18 @@ export function SignupScreen() {
   const { notify, isEmailTaken, registerAccount } = useSpark();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSentFor, setCodeSentFor] = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [age, setAge] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordError = password ? passwordIssue(password) : null;
+  const emailKey = email.trim().toLowerCase();
+  const codeSent = codeSentFor === emailKey && emailKey.length > 0;
+  const verified = verifiedEmail === emailKey && emailKey.length > 0;
 
   function finishSignup(provider: SparkUser["provider"]) {
     const next = { name: createNickname(), email: email.trim(), provider };
@@ -124,8 +132,51 @@ export function SignupScreen() {
     router.push("/login");
   }
 
+  function onEmailChange(value: string) {
+    setEmail(value);
+    setCode("");
+    setError(null);
+  }
+
+  function requestVerification() {
+    if (!isEmailShape(email)) {
+      setError("이메일 형식을 확인해 주세요.");
+      return;
+    }
+    if (isEmailTaken(email)) {
+      setCodeSentFor(null);
+      setVerifiedEmail(null);
+      setCode("");
+      setError("이미 사용 중인 이메일입니다.");
+      return;
+    }
+    setError(null);
+    setCode("");
+    setVerifiedEmail(null);
+    setCodeSentFor(emailKey);
+    notify(VERIFICATION_SENT);
+  }
+
+  function confirmVerification() {
+    if (!codeSent) return;
+    if (!/^\d{4,6}$/.test(code)) {
+      setError("인증번호는 4~6자리 숫자로 입력해 주세요.");
+      return;
+    }
+    if (code !== TEST_VERIFICATION_CODE) {
+      setError("인증번호가 올바르지 않습니다.");
+      return;
+    }
+    setError(null);
+    setVerifiedEmail(emailKey);
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!verified) {
+      setError("이메일 인증을 완료해 주세요.");
+      return;
+    }
     if (!isEmailShape(email) || passwordIssue(password)) {
       setError("이메일과 비밀번호를 확인해 주세요.");
       return;
@@ -155,18 +206,57 @@ export function SignupScreen() {
         }}
       />
       <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <label className="block space-y-2" htmlFor="signup-email">
-          <span className="text-xs text-slate-500">이메일</span>
-          <input
-            id="signup-email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@spark.market"
-            className={fieldClass}
-          />
-        </label>
+        <div className="block space-y-2">
+          <label htmlFor="signup-email" className="text-xs text-slate-500">이메일</label>
+          <div className="flex items-stretch gap-2">
+            <input
+              id="signup-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => onEmailChange(event.target.value)}
+              placeholder="you@spark.market"
+              className={`${fieldClass} min-w-0 flex-1`}
+            />
+            <button
+              type="button"
+              onClick={requestVerification}
+              className={`${ghostButtonClass} w-[7.5rem] shrink-0 whitespace-normal px-2.5 py-2 text-center text-xs leading-4`}
+            >
+              중복확인 및
+              <br />
+              인증번호 발송
+            </button>
+          </div>
+        </div>
+        <div className="block space-y-2">
+          <label htmlFor="signup-code" className="text-xs text-slate-500">인증번호</label>
+          <div className="flex items-stretch gap-2">
+            <input
+              id="signup-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              disabled={!codeSent || verified}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="4~6자리"
+              aria-describedby="signup-code-status"
+              className={`${fieldClass} min-w-0 flex-1 disabled:bg-slate-50 disabled:text-slate-400`}
+            />
+            <button
+              type="button"
+              onClick={confirmVerification}
+              disabled={!codeSent || verified}
+              className={`${ghostButtonClass} shrink-0 px-4`}
+            >
+              {verified ? "인증 완료" : "인증 확인"}
+            </button>
+          </div>
+          <p id="signup-code-status" role="status" className={`text-xs ${verified ? "font-medium text-emerald-600" : "text-slate-400"}`}>
+            {verified ? "인증 완료" : "인증번호는 4~6자리입니다."}
+          </p>
+        </div>
         <div className="block space-y-2">
           <label htmlFor="signup-password" className="text-xs text-slate-500">비밀번호</label>
           <input
@@ -191,7 +281,7 @@ export function SignupScreen() {
           <Check checked={marketing} onChange={setMarketing} label="[선택] 마케팅 정보 수신 동의" />
         </div>
 
-        <button type="submit" className={`${primaryButtonClass} w-full`}>회원가입</button>
+        <button type="submit" disabled={!verified} className={`${primaryButtonClass} w-full`}>완료</button>
         {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">

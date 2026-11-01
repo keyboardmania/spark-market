@@ -47,6 +47,11 @@ export function SiteFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/membership" className="hover:text-slate-900">
+                Spark VIP
+              </Link>
+            </li>
+            <li>
               <Link href="/orders" className="hover:text-slate-900">
                 주문 내역
               </Link>

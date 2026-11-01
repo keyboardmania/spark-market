@@ -7,12 +7,14 @@ import {
   CATEGORIES,
   ORIGINS,
   SALE_STATUSES,
+  STORED_PRICE_PER_DOLLAR,
   type Category,
   type Origin,
   type Product,
   type ProductMedia,
   type SaleStatus,
 } from "@/data/mockData";
+import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductCard } from "@/components/spark/ProductCard";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -76,8 +78,9 @@ function mediaKind(file: File): ProductMedia["kind"] | null {
 }
 
 function priceIssue(value: string) {
-  if (!/^\d+$/.test(value)) return "가격은 0원부터 10억 사이의 숫자만 입력할 수 있어요.";
-  if (value.length > 10 || Number(value) > MAX_PRICE) return "가격은 0원부터 10억 사이의 숫자만 입력할 수 있어요.";
+  const message = "가격은 $0부터 $1,000,000 사이의 숫자만 입력할 수 있어요.";
+  if (!/^\d+$/.test(value)) return message;
+  if (Number(value) * STORED_PRICE_PER_DOLLAR > MAX_PRICE) return message;
   return null;
 }
 
@@ -92,7 +95,7 @@ function draftFrom(product: Product): Draft {
     title: product.title,
     category: product.category,
     country: product.country ?? "",
-    price: String(product.price),
+    price: String(Math.round(product.price / STORED_PRICE_PER_DOLLAR)),
     description: product.description,
     saleStatus: product.saleStatus,
     media,
@@ -135,7 +138,7 @@ export function SellForm({ productId }: { productId?: string }) {
     ip: "새 매물",
     category: draft.category || "피규어",
     country: draft.country || undefined,
-    price: /^\d+$/.test(draft.price) ? Number(draft.price) : 0,
+    price: /^\d+$/.test(draft.price) ? Number(draft.price) * STORED_PRICE_PER_DOLLAR : 0,
     condition: product?.condition ?? "S급",
     saleStatus: draft.saleStatus,
     description: draft.description.trim(),
@@ -265,7 +268,7 @@ export function SellForm({ productId }: { productId?: string }) {
       title: draft.title.trim(),
       category: draft.category,
       country: draft.country,
-      price: Number(draft.price),
+      price: Number(draft.price) * STORED_PRICE_PER_DOLLAR,
       description,
       imageUrl: firstImage?.url,
       media: draft.media,
@@ -313,7 +316,7 @@ export function SellForm({ productId }: { productId?: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6">
       <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">SELL</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{editing ? "상품 수정" : "상품 등록"}</h1>
       <p className="mt-2 text-sm text-slate-500">입력하는 즉시 오른쪽 카드에 반영돼요.</p>
@@ -399,7 +402,7 @@ export function SellForm({ productId }: { productId?: string }) {
             </div>
 
             <label className="block space-y-2">
-              <span className="text-xs font-medium text-slate-500">가격</span>
+              <span className="text-xs font-medium text-slate-500">가격 (USD)</span>
               <input
                 inputMode="numeric"
                 value={draft.price}
@@ -408,7 +411,7 @@ export function SellForm({ productId }: { productId?: string }) {
                 className={fieldClass}
               />
               <span className={`block text-xs ${errors.price ? "text-rose-600" : "text-slate-400"}`}>
-                {errors.price ?? "0원부터 10억까지 숫자만 입력할 수 있어요."}
+                {errors.price ?? "$0부터 $1,000,000까지 숫자만 입력할 수 있어요."}
               </span>
             </label>
 
@@ -467,11 +470,14 @@ export function SellForm({ productId }: { productId?: string }) {
         {!editing && mine.length > 0 ? (
           <div className="mt-6">
             <h2 className="text-sm font-medium text-slate-700">내가 등록한 매물 · {mine.length}</h2>
-            <ul className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <ul className="mt-4 grid grid-cols-1 items-start gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
               {mine.map((item) => (
-                <li key={item.id}>
-                  <ProductCard product={item} />
-                  <div className="mt-1 flex gap-3 px-1 text-xs text-slate-400">
+                <li key={item.id} className="flex min-w-0 flex-col gap-2 self-start">
+                  <div className="w-full">
+                    <ProductCard product={item} />
+                  </div>
+                  <ProductInquiry productId={item.id} compact />
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-slate-400">
                     <Link href={`/sell/${item.id}`}>수정</Link>
                     <DeleteProductButton product={item} variant="text" />
                     <Link href={`/products/${item.id}`}>상세 보기</Link>
