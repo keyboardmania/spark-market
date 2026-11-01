@@ -37,9 +37,6 @@ type SparkContextValue = {
   registerAccount: (account: StoredAccount) => void;
   authenticate: (email: string, password: string) => SparkUser | null;
   activateMembership: () => boolean;
-  cartIds: string[];
-  addToCart: (id: string) => void;
-  removeFromCart: (id: string) => void;
   wishlistIds: string[];
   toggleWishlist: (id: string) => void;
   products: Product[];
@@ -87,7 +84,6 @@ function expireCancelRequests(orders: Order[], now = Date.now()) {
 export function SparkProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SparkUser | null>(null);
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
-  const [cartIds, setCartIds] = useState<string[]>([]);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [records, setRecords] = useState<Array<Product & { deletedAt: string | null }>>(() =>
     PRODUCTS.map((product) => ({ ...product, deletedAt: null })),
@@ -171,22 +167,6 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     return true;
   }, [user]);
 
-  const addToCart = useCallback(
-    (id: string) => {
-      if (cartIds.includes(id)) {
-        notify("이미 장바구니에 담긴 상품이에요.");
-        return;
-      }
-      setCartIds((current) => [...current, id]);
-      notify("장바구니에 담았어요.");
-    },
-    [cartIds, notify],
-  );
-
-  const removeFromCart = useCallback((id: string) => {
-    setCartIds((current) => current.filter((item) => item !== id));
-  }, []);
-
   const toggleWishlist = useCallback(
     (id: string) => {
       const exists = wishlistIds.includes(id);
@@ -222,7 +202,6 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   const softDeleteProduct = useCallback((id: string) => {
     const deletedAt = new Date().toISOString();
     setRecords((current) => current.map((item) => (item.id === id ? { ...item, deletedAt } : item)));
-    setCartIds((current) => current.filter((item) => item !== id));
   }, []);
 
   const addAddress = useCallback((draft: AddressDraft) => {
@@ -293,7 +272,6 @@ export function SparkProvider({ children }: { children: ReactNode }) {
 
   const placeOrder = useCallback((order: Order) => {
     setOrders((current) => [order, ...current]);
-    setCartIds((current) => current.filter((id) => id !== order.productId));
   }, []);
 
   const updateOrder = useCallback((id: string, patch: Partial<Order>) => {
@@ -400,9 +378,6 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     registerAccount,
     authenticate,
     activateMembership,
-    cartIds,
-    addToCart,
-    removeFromCart,
     wishlistIds,
     toggleWishlist,
     products,

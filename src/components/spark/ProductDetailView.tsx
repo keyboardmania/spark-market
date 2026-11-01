@@ -14,7 +14,7 @@ import { useMounted } from "@/components/spark/useMounted";
 export function ProductDetailView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const router = useRouter();
   const mounted = useMounted();
-  const { products, user, wishlistIds, toggleWishlist, addToCart, ensureRoom, rooms, isProductDeleted } = useSpark();
+  const { products, user, wishlistIds, toggleWishlist, ensureRoom, rooms, isProductDeleted } = useSpark();
   const deleted = mounted && isProductDeleted(id);
   const live = products.find((product) => product.id === id);
   const product = deleted ? undefined : mounted ? (live ?? initialProduct) : initialProduct;
@@ -107,10 +107,7 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-2 sm:grid-cols-3">
-          <button type="button" className={ghostButtonClass} disabled={sold} onClick={() => addToCart(product.id)}>
-            장바구니 담기
-          </button>
+        <div className="mt-6 grid gap-2 sm:grid-cols-2">
           {mine && saleRoom ? (
             <Link href={`/chat/${saleRoom.id}`} className={ghostButtonClass}>
               구매자 채팅

@@ -13,7 +13,7 @@ import type { SparkUser } from "@/data/mockData";
 export function MyPageView() {
   const router = useRouter();
   const mounted = useMounted();
-  const { user, logout, wishlistIds, products, orders, cartIds } = useSpark();
+  const { user, logout, wishlistIds, products, orders } = useSpark();
   const wished = mounted ? products.filter((product) => wishlistIds.includes(product.id)) : [];
   const purchaseCount = mounted ? orders.filter((order) => order.role === "purchase").length : 0;
 
@@ -55,18 +55,16 @@ export function MyPageView() {
             <Link href="/membership" className={user ? primaryButtonClass : ghostButtonClass}>Spark VIP 가입</Link>
           ) : null}
         </div>
-        <dl className="mt-6 grid grid-cols-3 gap-3">
-          <Stat label="장바구니" value={mounted ? String(cartIds.length) : "0"} />
+        <dl className="mt-6 grid max-w-md grid-cols-2 gap-3">
           <Stat label="찜" value={mounted ? String(wishlistIds.length) : "0"} />
           <Stat label="구매" value={String(purchaseCount)} />
         </dl>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Shortcut href="/orders" label="구매/판매 내역" />
         <Shortcut href="/chat" label="1:1 채팅" />
         <Shortcut href="/sell" label="상품 등록" />
-        <Shortcut href="/cart" label="장바구니" />
       </div>
 
       <AddressBook />

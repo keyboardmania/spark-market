@@ -9,7 +9,7 @@ import { useSpark } from "@/components/spark/SparkProvider";
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, cartIds, rooms, products, logout } = useSpark();
+  const { user, rooms, products, logout } = useSpark();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const unread = rooms.reduce((sum, room) => sum + room.unread, 0);
@@ -72,7 +72,6 @@ export function SiteHeader() {
               멤버십
             </Link>
             <IconLink href="/chat" label="채팅" badge={unread} />
-            <IconLink href="/cart" label="장바구니" badge={cartIds.length} icon="cart" />
             {user ? (
               <button type="button" onClick={signOut} className="hidden rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 lg:inline-flex">
                 로그아웃
@@ -130,7 +129,6 @@ export function SiteHeader() {
             <MenuLink href="/membership">멤버십</MenuLink>
             <MenuLink href="/orders">구매/판매 내역</MenuLink>
             <MenuLink href="/chat">1:1 채팅</MenuLink>
-            <MenuLink href="/cart">장바구니</MenuLink>
             <MenuLink href="/mypage">마이페이지</MenuLink>
             {user ? (
               <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
@@ -203,10 +201,10 @@ function SearchField({
   );
 }
 
-function IconLink({ href, label, badge, icon = "chat" }: { href: string; label: string; badge: number; icon?: "chat" | "cart" }) {
+function IconLink({ href, label, badge }: { href: string; label: string; badge: number }) {
   return (
     <Link href={href} aria-label={badge > 0 ? `${label} ${badge}개` : label} className="relative grid h-10 w-10 place-items-center rounded-full text-slate-700 hover:bg-slate-50">
-      {icon === "cart" ? <CartIcon /> : <ChatIcon />}
+      <ChatIcon />
       {badge > 0 ? (
         <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-400 px-1 text-[10px] font-medium leading-4 text-white">
           {badge}
@@ -228,16 +226,6 @@ function ChatIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
       <path d="M6 16.5 4 19V7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v6A2.5 2.5 0 0 1 17.5 16H6Z" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function CartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <path d="M6 7h15l-1.5 8.5H8L6 7Zm0 0L5 4H3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="9" cy="19" r="1.2" fill="currentColor" />
-      <circle cx="17" cy="19" r="1.2" fill="currentColor" />
     </svg>
   );
 }
