@@ -10,6 +10,7 @@ import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import { addReview } from "@/data/shared";
 
 function formatRequestedAt(iso: string) {
   const date = new Date(iso);
@@ -26,8 +27,11 @@ function formatRequestedAt(iso: string) {
 export function OrderDetailView({ id }: { id: string }) {
   const mounted = useMounted();
   const router = useRouter();
-  const { orders, user, requestCancel, notify } = useSpark();
+  const { orders, user, requestCancel, updateOrder, notify } = useSpark();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewMedia, setReviewMedia] = useState<{ id: string; name: string; url: string }[]>([]);
   const [reason, setReason] = useState("");
   const [detail, setDetail] = useState("");
   const handledQuery = useRef(false);
@@ -70,12 +74,12 @@ export function OrderDetailView({ id }: { id: string }) {
   const description = product?.description.trim() ? product.description : "등록된 상품 설명을 찾을 수 없어요.";
   const seller = order.role === "purchase" ? SELLERS.find((item) => item.name === order.counterpart) : undefined;
   const counterpartLabel = order.role === "purchase" ? "판매자" : "구매자";
-  const vip = user?.membership === "vip";
-  const feeRate = vip ? 0.06 : 0.1;
-  const fee = Math.round(order.price * feeRate);
-  const payout = order.price - fee;
+  const itemPrice = order.itemPrice ?? order.price;
+  const feeRate = order.feeRate ?? (user?.membership === "vip" ? 0.06 : 0.1);
+  const fee = order.feeAmount ?? Math.round(itemPrice * feeRate * 100) / 100;
+  const payout = order.payoutAmount ?? Math.round((itemPrice - fee) * 100) / 100;
   const settlementStatus = order.status === "구매확정" ? "정산완료" : order.status === "거래취소" ? "정산취소" : "정산대기";
-  const feeLabel = vip ? "중개 수수료 6% · Spark VIP" : "중개 수수료 10%";
+  const feeLabel = feeRate <= 0.06 ? "중개 수수료 6% · Spark VIP" : "중개 수수료 10%";
   const detailLength = detail.trim().length;
   const canSubmit = reason !== "" && detailLength >= 10;
   const showCancelButton = !order.cancelRequest && order.status !== "구매확정" && order.status !== "거래취소";
@@ -116,7 +120,6 @@ export function OrderDetailView({ id }: { id: string }) {
             <ProductVisual
               motif={order.motif}
               palette={order.palette}
-              ip={order.ip}
               uid={order.id}
               imageUrl={order.imageUrl ?? product?.imageUrl}
               alt={order.title}
@@ -177,10 +180,12 @@ export function OrderDetailView({ id }: { id: string }) {
           <section className="rounded-2xl border border-slate-200 p-4">
             <h2 className="text-sm font-medium text-slate-900">정산</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <Row label="상품 금액" value={formatPrice(order.price)} />
+              <Row label="상품 금액" value={formatPrice(itemPrice)} />
               <Row label={feeLabel} value={formatPrice(fee)} />
               <Row label="최종 정산 금액" value={formatPrice(payout)} strong />
               <Row label="정산 상태" value={settlementStatus} />
+              {order.pgStatus ? <Row label="PG 예치" value={order.pgStatus} /> : null}
+              {order.priceLocked ? <Row label="금액 고정" value="결제 시점 USD" /> : null}
             </dl>
           </section>
         ) : null}
@@ -208,6 +213,62 @@ export function OrderDetailView({ id }: { id: string }) {
           </section>
         ) : null}
       </div>
+
+      {order.role === "purchase" && order.status === "구매확정" && !order.review ? (
+        <form
+          className="mt-6 space-y-3 rounded-2xl border border-slate-200 p-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!reviewText.trim()) return;
+            const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            addReview({
+              id: crypto.randomUUID(),
+              orderId: order.id,
+              productId: order.productId,
+              sellerId: product?.sellerId ?? order.counterpart,
+              author: user?.name ?? "구매자",
+              authorId: "me",
+              rating,
+              text: reviewText.trim(),
+              media: reviewMedia.slice(0, 2),
+              createdAt: new Date().toISOString().slice(0, 10),
+              mediaExpiresAt: expires,
+              deletedAt: null,
+            });
+            updateOrder(order.id, { review: { rating, text: reviewText.trim() } });
+            notify("리뷰를 남겼어요. 사진과 동영상은 90일 뒤 삭제됩니다.");
+          }}
+        >
+          <h2 className="text-lg font-semibold text-slate-900">리뷰 작성</h2>
+          <label className="block space-y-2 text-sm">
+            별점
+            <select value={rating} onChange={(event) => setRating(Number(event.target.value))} className={fieldClass}>
+              {[5, 4, 3, 2, 1].map((score) => (
+                <option key={score} value={score}>{score}</option>
+              ))}
+            </select>
+          </label>
+          <textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} rows={3} className={fieldClass} placeholder="거래 후기를 적어 주세요" />
+          <label className="block text-xs text-slate-500">
+            사진·동영상 최대 2개
+            <input
+              type="file"
+              accept="image/png,image/jpeg,video/mp4,video/quicktime"
+              multiple
+              className="mt-2 block"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []).slice(0, 2);
+                Promise.all(files.map((file) => new Promise<{ id: string; name: string; url: string }>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve({ id: crypto.randomUUID(), name: file.name, url: typeof reader.result === "string" ? reader.result : "" });
+                  reader.readAsDataURL(file);
+                }))).then(setReviewMedia);
+              }}
+            />
+          </label>
+          <button type="submit" disabled={!reviewText.trim()} className={primaryButtonClass}>리뷰 등록</button>
+        </form>
+      ) : null}
 
       {showCancelButton ? (
         <div className="mt-6">

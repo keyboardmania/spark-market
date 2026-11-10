@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
-import { createNickname, type SparkUser } from "@/data/mockData";
+import { TEST_VERIFICATION_CODE, createNickname, type SparkUser } from "@/data/mockData";
 
 const LOGIN_ERROR = "이메일 또는 비밀번호가 올바르지 않습니다.";
-const TEST_VERIFICATION_CODE = "5825";
 const VERIFICATION_SENT = "인증번호가 발송되었습니다. (테스트 번호: 5825)";
 
 const SOCIAL_PROVIDERS = [
@@ -24,7 +23,7 @@ function isEmailShape(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-function passwordIssue(password: string) {
+export function passwordIssue(password: string) {
   if (password.length < 10 || password.length > 20) return "비밀번호는 10~20자로 입력해 주세요.";
   if (/[^A-Za-z0-9!~*^-]/.test(password)) return "특수기호는 ! ~ - * ^ 만 사용할 수 있어요.";
   let kinds = 0;
@@ -46,7 +45,7 @@ export function LoginScreen() {
   function enter(user: SparkUser) {
     const existing = findAccount(user.email);
     if (!existing || existing.provider !== user.provider) {
-      setError("가입된 소셜 계정이 없습니다. 회원가입에서 연결한 뒤 이 화면에서 다시 로그인해 주세요.");
+      setError(LOGIN_ERROR);
       return;
     }
     setError(null);
@@ -95,6 +94,9 @@ export function LoginScreen() {
           />
         </label>
         <button type="submit" className={`${primaryButtonClass} w-full`}>이메일로 로그인</button>
+        <p className="text-right text-sm">
+          <Link href="/forgot" className="text-slate-500 hover:text-slate-900">비밀번호 찾기</Link>
+        </p>
         {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">
@@ -339,10 +341,10 @@ function SocialRow({ onPick, requireTerms = false }: { onPick: (user: SparkUser)
         <SocialAuthModal
           provider={provider}
           onCancel={close}
-          onSuccess={() => {
+          onSuccess={(email) => {
             const picked = {
               name: `${provider.name} 사용자`,
-              email: `${provider.id}.user@spark.market`,
+              email,
               provider: provider.id,
             };
             close();
@@ -412,20 +414,22 @@ function SocialAuthModal({
 }: {
   provider: (typeof SOCIAL_PROVIDERS)[number];
   onCancel: () => void;
-  onSuccess: () => void;
+  onSuccess: (email: string) => void;
 }) {
+  const providedEmail = `${provider.id}.user@spark.market`;
+  const [email, setEmail] = useState(providedEmail);
+  const [error, setError] = useState<string | null>(null);
   const onSuccessRef = useRef(onSuccess);
-  const finished = useRef(false);
   onSuccessRef.current = onSuccess;
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (finished.current) return;
-      finished.current = true;
-      onSuccessRef.current();
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, []);
+  function finish() {
+    if (!isEmailShape(email)) {
+      setError("이메일 형식을 확인해 주세요.");
+      return;
+    }
+    setError(null);
+    onSuccessRef.current(email.trim());
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4" onClick={onCancel}>
@@ -442,11 +446,12 @@ function SocialAuthModal({
           <p className="mt-2 text-sm leading-6 text-slate-500">
             Spark가 {provider.name} 계정의 기본 프로필을 확인합니다. 이 창은 실제 서비스로 이동하지 않는 가상 인증입니다.
           </p>
-          <p className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-700">{provider.id}.user@spark.market</p>
-          <div className="mt-5 flex flex-col items-center gap-3 py-3" role="status" aria-live="polite">
-            <span className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-            <p className="text-sm text-slate-500">계정 연동 중</p>
-          </div>
+          <p className="mt-4 text-xs text-slate-400">{provider.name}이 제공한 이메일을 채워 두었습니다. 필요하면 바꿀 수 있어요.</p>
+          <label className="mt-3 block space-y-2 text-xs text-slate-500">이메일
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} />
+          </label>
+          {error ? <p role="alert" className="mt-2 text-sm text-rose-600">{error}</p> : null}
+          <button type="button" onClick={finish} className={`${primaryButtonClass} mt-4 w-full`}>이 이메일로 계속</button>
           <button type="button" onClick={onCancel} className={`${ghostButtonClass} mt-2 w-full`}>
             취소
           </button>

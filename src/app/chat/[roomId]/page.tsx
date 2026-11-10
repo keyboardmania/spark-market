@@ -3,6 +3,7 @@ import { ChatScreen } from "@/components/spark/ChatScreen";
 import { CHAT_ROOMS } from "@/data/mockData";
 
 export const metadata: Metadata = { title: "1:1 채팅" };
+export const instant = false;
 
 export function generateStaticParams() {
   return CHAT_ROOMS.map((room) => ({ roomId: room.id }));

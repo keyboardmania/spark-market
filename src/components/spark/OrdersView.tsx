@@ -57,14 +57,14 @@ export function OrdersView() {
         <ul className="mt-6 space-y-4">
           {visible.map((order) => {
             const isPurchase = order.role === "purchase";
-            const canConfirm = isPurchase && (order.status === "배송중" || order.status === "배송완료");
+            const canConfirm = isPurchase && order.status === "배송완료";
             const canLinkCancel = order.status !== "구매확정" && order.status !== "거래취소";
             const canTrack = Boolean(order.tracking) && order.status !== "거래취소";
             return (
               <li key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex gap-4">
                   <Link href={`/orders/${order.id}`} className="shrink-0 rounded-xl">
-                    <ProductVisual motif={order.motif} palette={order.palette} ip={order.ip} uid={order.id} imageUrl={order.imageUrl} alt="" className="h-24 w-24 rounded-xl" />
+                    <ProductVisual motif={order.motif} palette={order.palette} uid={order.id} imageUrl={order.imageUrl} alt="" className="h-24 w-24 rounded-xl" />
                   </Link>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -84,6 +84,9 @@ export function OrdersView() {
                   </div>
                 )}
 
+                {isPurchase && order.status === "배송완료" ? (
+                  <p className="mt-3 text-xs leading-5 text-slate-400">배송완료 후 5일이 지나면 자동 구매확정됩니다.</p>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" disabled={!canConfirm} onClick={() => confirmPurchase(order)} className={primaryButtonClass}>구매 확정</button>
                   {canLinkCancel ? (

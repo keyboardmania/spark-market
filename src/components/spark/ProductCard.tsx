@@ -17,7 +17,6 @@ export function ProductCard({ product, linked = true, meta }: { product: Product
       <ProductVisual
         motif={product.motif}
         palette={product.palette}
-        ip={product.ip}
         uid={product.id}
         imageUrl={product.imageUrl}
         alt={product.title}
@@ -29,7 +28,7 @@ export function ProductCard({ product, linked = true, meta }: { product: Product
   const copy = (
     <div className="flex flex-1 flex-col gap-1 px-1 py-3">
       <p className="text-[11px] tracking-wide text-slate-400">
-        {meta ?? [product.ip, product.category, product.country].filter(Boolean).join(" · ")}
+        {meta ?? [product.category, product.country].filter(Boolean).join(" · ")}
       </p>
       <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900">{product.title}</h2>
       <div className="mt-auto flex items-end justify-between gap-3 pt-2">

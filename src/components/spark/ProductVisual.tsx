@@ -3,15 +3,13 @@ import type { Motif, Palette } from "@/data/mockData";
 type ProductVisualProps = {
   motif: Motif;
   palette: Palette;
-  ip: string;
   uid: string;
   imageUrl?: string;
   alt?: string;
   className?: string;
-  showLabel?: boolean;
 };
 
-export function ProductVisual({ motif, palette, ip, uid, imageUrl, alt = "", className = "", showLabel = true }: ProductVisualProps) {
+export function ProductVisual({ motif, palette, uid, imageUrl, alt = "", className = "" }: ProductVisualProps) {
   return (
     <div
       className={`relative overflow-hidden ${className}`}
@@ -20,7 +18,7 @@ export function ProductVisual({ motif, palette, ip, uid, imageUrl, alt = "", cla
       }}
     >
       {imageUrl ? (
-        <img src={imageUrl} alt={alt} className="h-full w-full object-cover" />
+        <img src={imageUrl} alt={alt} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center p-[12%]">
           {motif === "card" ? <CardArt palette={palette} uid={uid} /> : null}
@@ -28,14 +26,6 @@ export function ProductVisual({ motif, palette, ip, uid, imageUrl, alt = "", cla
           {motif === "plush" ? <PlushArt palette={palette} /> : null}
           {motif === "pouch" ? <PouchArt palette={palette} /> : null}
         </div>
-      )}
-      {imageUrl || !showLabel ? null : (
-        <p
-          className="pointer-events-none absolute bottom-3 left-3 text-[10px] font-medium tracking-[0.16em]"
-          style={{ color: palette.ink }}
-        >
-          {ip}
-        </p>
       )}
     </div>
   );

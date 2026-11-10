@@ -73,7 +73,7 @@ export function AdminLogin() {
           />
           {error ? (
             <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {error.field === "email" ? "이메일" : error.field === "password" ? "비밀번호" : "세션"}: {error.message}
+              이메일 또는 비밀번호가 올바르지 않습니다.
             </p>
           ) : null}
           <button type="submit" className={`${primaryButtonClass} w-full`}>

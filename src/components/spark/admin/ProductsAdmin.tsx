@@ -1,87 +1,123 @@
 "use client";
 
 import { useState } from "react";
-import { PRODUCT_FLAGS, formatPrice } from "@/data/mockData";
+import { PRODUCT_FLAGS, SALE_STATUSES, formatPrice, getProductById, sellerAccount, type SaleStatus } from "@/data/mockData";
 import { SaleStatusText } from "@/components/spark/Badges";
 import { useAdmin } from "@/components/spark/AdminProvider";
+import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
-import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
+import { DataTable, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
+import { useShared, type LiveReport } from "@/data/shared";
 
 export function ProductsAdmin() {
-  const { products, removeProduct, categories, addCategory, updateCategory, deleteCategory } = useAdmin();
-  const [filter, setFilter] = useState<"전체" | "금지·신고">("전체");
+  const { categories, addCategory, updateCategory, deleteCategory } = useAdmin();
+  const { products, softDeleteProduct } = useSpark();
+  const shared = useShared();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<"전체" | SaleStatus | "금지/신고">("전체");
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [notice, setNotice] = useState("");
 
   const flagged = new Map(PRODUCT_FLAGS.map((item) => [item.productId, item]));
-  const visible = products.filter((product) => filter === "전체" || flagged.has(product.id));
+  const sanctioned = shared.deletions.filter((item) => item.kind === "상품");
+  const visible = products.filter((product) => {
+    const seller = sellerAccount(product.sellerId);
+    const needle = query.trim().toLowerCase();
+    const textOk = !needle || `${product.title} ${seller.name} ${seller.email}`.toLowerCase().includes(needle);
+    if (!textOk) return false;
+    if (status === "전체") return true;
+    if (status === "금지/신고") return isRestricted(product.id, flagged, shared.reports);
+    return product.saleStatus === status;
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">CATALOG</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">상품/카테고리 관리</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">상품·카테고리 관리</h1>
         {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+        {sanctioned.length > 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            신고 수락이 3회를 초과해 삭제한 상품: {sanctioned.map((item) => getProductById(item.id)?.title ?? item.id).join(", ")}. 데이터는 남고 사진·동영상은 3개월 뒤 삭제됩니다.
+          </p>
+        ) : null}
       </div>
+      <FilterBar>
+        <FilterField label="상품 검색">
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="판매자 닉네임·이메일 또는 상품명" className={fieldClass} />
+        </FilterField>
+        <FilterField label="판매 상태" className="sm:max-w-[180px]">
+          <select value={status} onChange={(event) => setStatus(event.target.value as "전체" | SaleStatus | "금지/신고")} className={fieldClass}>
+            <option value="전체">전체</option>
+            {SALE_STATUSES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+            <option value="금지/신고">금지/신고</option>
+          </select>
+        </FilterField>
+      </FilterBar>
 
       <Panel
         title="등록 매물"
-        description={`${products.length}개 노출 중`}
+        description={`${visible.length}개 표시 · 예약중 상품은 삭제할 수 없고, 신고 수락이 3회를 넘으면 자동으로 내려갑니다.`}
         flush
-        action={
-          <div className="flex rounded-full bg-slate-50 p-1 text-xs">
-            {(["전체", "금지·신고"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={`rounded-full px-3 py-1.5 ${filter === item ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-400"}`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        }
       >
         <DataTable>
           <thead>
             <tr>
               <th className={thClass}>상품</th>
+              <th className={thClass}>판매자</th>
               <th className={thClass}>카테고리</th>
               <th className={thClass}>가격</th>
               <th className={thClass}>상태</th>
+              <th className={thClass}>신고</th>
               <th className={thClass}>조치</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((product) => {
               const flag = flagged.get(product.id);
+              const seller = sellerAccount(product.sellerId);
+              const strikes = acceptedStrikes(shared.reports, product.id);
+              const reserved = product.saleStatus === "예약중";
               return (
                 <tr key={product.id}>
                   <td className={tdClass}>
                     <span className="block font-medium text-slate-900">{product.title}</span>
-                    <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                      {product.ip}
-                      {flag ? <StatusPill tone={flag.flag === "금지" ? "rose" : "amber"}>{flag.flag}</StatusPill> : null}
-                    </span>
+                    {flag ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <StatusPill tone={flag.flag === "금지" ? "rose" : "amber"}>{flag.flag}</StatusPill>
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className={tdClass}>
+                    <span className="block text-slate-900">{seller.name}</span>
+                    <span className="text-xs text-slate-400">{seller.email}</span>
                   </td>
                   <td className={tdClass}>{product.category}</td>
                   <td className={`${tdClass} tabular-nums`}>{formatPrice(product.price)}</td>
                   <td className={tdClass}>
                     <SaleStatusText status={product.saleStatus} />
                   </td>
+                  <td className={`${tdClass} tabular-nums`}>{strikes > 0 ? `수락 ${strikes}회` : "—"}</td>
                   <td className={tdClass}>
                     <button
                       type="button"
                       onClick={() => {
-                        removeProduct(product.id);
-                        setNotice(`${product.title} 매물을 삭제했어요.`);
+                        if (reserved) {
+                          setNotice("예약중인 상품은 삭제할 수 없어요.");
+                          return;
+                        }
+                        softDeleteProduct(product.id);
+                        setNotice(`${product.title} 매물을 삭제했어요. 데이터는 남고 사진·동영상은 3개월 후 삭제됩니다.`);
                       }}
-                      className={flag ? "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700" : "rounded-full px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"}
+                      className={reserved ? "rounded-full px-3 py-1.5 text-xs text-slate-400" : flag || strikes > 3 ? "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700" : "rounded-full px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"}
                     >
-                      {flag ? `${flag.flag} 매물 삭제` : "삭제"}
+                      {reserved ? "삭제 불가" : flag ? `${flag.flag} 매물 삭제` : "삭제"}
                     </button>
                   </td>
                 </tr>
@@ -89,8 +125,8 @@ export function ProductsAdmin() {
             })}
             {visible.length === 0 ? (
               <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={5}>
-                  표시할 매물이 없어요.
+                <td className={`${tdClass} text-slate-400`} colSpan={7}>
+                  조건에 맞는 매물이 없어요.
                 </td>
               </tr>
             ) : null}
@@ -103,9 +139,14 @@ export function ProductsAdmin() {
           className="flex flex-col gap-2 sm:flex-row"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!draft.trim()) return;
-            addCategory(draft);
-            setNotice(`${draft.trim()} 카테고리를 추가했어요.`);
+            const name = draft.trim();
+            if (!name) return;
+            if (categories.some((item) => item.name.localeCompare(name, "en", { sensitivity: "base" }) === 0)) {
+              setNotice("이미 있는 카테고리 이름은 등록할 수 없어요.");
+              return;
+            }
+            addCategory(name);
+            setNotice(`${name} 카테고리를 추가했어요.`);
             setDraft("");
           }}
         >
@@ -158,6 +199,10 @@ export function ProductsAdmin() {
                   type="button"
                   className="rounded-full px-4 py-3 text-sm text-rose-600 hover:bg-rose-50"
                   onClick={() => {
+                    if (count > 0) {
+                      setNotice("등록된 상품이 있는 카테고리는 삭제할 수 없어요.");
+                      return;
+                    }
                     deleteCategory(category.id);
                     setNotice(`${category.name} 카테고리를 삭제했어요.`);
                   }}
@@ -172,4 +217,13 @@ export function ProductsAdmin() {
       </Panel>
     </div>
   );
+}
+
+function acceptedStrikes(reports: LiveReport[], productId: string) {
+  return reports.filter((report) => report.status === "수락" && report.category === "상품" && report.targetId === productId).length;
+}
+
+function isRestricted(productId: string, flagged: Map<string, { flag: "신고" | "금지" }>, reports: LiveReport[]) {
+  if (flagged.has(productId)) return true;
+  return reports.some((report) => report.category === "상품" && report.targetId === productId && report.status !== "거절");
 }

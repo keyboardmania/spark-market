@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AccountPanels } from "@/components/spark/AccountPanels";
 import { AddressBook } from "@/components/spark/AddressBook";
 import { SparkVipBadge } from "@/components/spark/Badges";
 import { ProductCard } from "@/components/spark/ProductCard";
@@ -68,6 +69,7 @@ export function MyPageView() {
       </div>
 
       <AddressBook />
+      <AccountPanels />
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-slate-900">찜한 상품</h2>

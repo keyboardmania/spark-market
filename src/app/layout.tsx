@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     default: "Spark",
     template: "%s · Spark",
   },
-  description: "하이큐!!, 블리치, 산리오, 포켓몬, 먼작귀를 거래하는 프리미엄 C2C 플랫폼 Spark",
+  description: "취향과 수집품이 머무는 프리미엄 C2C 플랫폼 Spark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

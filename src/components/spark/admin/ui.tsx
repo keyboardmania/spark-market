@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, type ReactNode } from "react";
 
 export function Panel({
   title,
@@ -56,5 +58,73 @@ export function DataTable({ children, wide = true, className = "" }: { children:
   );
 }
 
+export function FilterBar({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-end gap-2">{children}</div>;
+}
+
+export function FilterField({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <label className={`flex min-w-[200px] flex-1 flex-col gap-1.5 text-[11px] font-medium tracking-wide text-slate-400 sm:max-w-xs ${className}`}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export const thClass = "px-4 py-3 text-[11px] font-medium tracking-wide text-slate-400";
 export const tdClass = "border-t border-slate-100 px-4 py-3 align-middle text-slate-700";
+
+export function DetailModal({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-detail-title"
+        className={`max-h-[85dvh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ${wide ? "max-w-2xl" : "max-w-lg"}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="admin-detail-title" className="text-lg font-semibold text-slate-900">
+            {title}
+          </h2>
+          <button type="button" onClick={onClose} className="rounded-full px-3 py-1 text-sm text-slate-500 hover:bg-slate-50">
+            닫기
+          </button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function DetailRows({ rows }: { rows: { label: string; value: ReactNode }[] }) {
+  return (
+    <dl className="divide-y divide-slate-100">
+      {rows.map((row) => (
+        <div key={row.label} className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 py-2.5 text-sm">
+          <dt className="text-slate-400">{row.label}</dt>
+          <dd className="min-w-0 text-slate-800">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}

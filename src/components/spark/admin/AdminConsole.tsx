@@ -4,13 +4,18 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
+import { useShared } from "@/data/shared";
 
 const NAV = [
   { href: "/admin", label: "대시보드 홈", exact: true },
-  { href: "/admin/products", label: "상품/카테고리 관리" },
+  { href: "/admin/products", label: "상품·카테고리 관리" },
   { href: "/admin/members", label: "회원 관리" },
-  { href: "/admin/trades", label: "거래 & 정산 관리" },
-  { href: "/admin/support", label: "고객센터 & 신고 관리" },
+  { href: "/admin/chats", label: "채팅 관리" },
+  { href: "/admin/trades", label: "거래·정산 관리" },
+  { href: "/admin/support", label: "고객센터 신고 관리" },
+  { href: "/admin/reviews", label: "리뷰 관리" },
+  { href: "/admin/operators", label: "운영자 계정 관리" },
+  { href: "/admin/desk", label: "문의·공지·FAQ·약관 관리" },
 ] as const;
 
 export function AdminConsole({ children }: { children: ReactNode }) {
@@ -37,8 +42,10 @@ export function AdminConsole({ children }: { children: ReactNode }) {
 function AdminFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { session, logout, inquiries, reports } = useAdmin();
-  const openCount = inquiries.filter((item) => item.status === "미답변").length + reports.filter((item) => item.status === "접수" || item.status === "처리중").length;
+  const { session, logout, inquiries } = useAdmin();
+  const shared = useShared();
+  const openReports = shared.reports.filter((item) => item.status === "접수" || item.status === "검토").length;
+  const openInquiries = inquiries.filter((item) => item.status === "미답변").length;
 
   function signOut() {
     logout();
@@ -66,8 +73,11 @@ function AdminFrame({ children }: { children: ReactNode }) {
                 className={`flex shrink-0 items-center justify-between gap-3 rounded-full px-3 py-2.5 text-sm md:rounded-xl ${active ? "bg-slate-900 font-medium text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
               >
                 <span>{item.label}</span>
-                {item.href === "/admin/support" && openCount > 0 ? (
-                  <span className={`rounded-full px-1.5 text-[10px] leading-4 ${active ? "bg-white text-slate-900" : "bg-rose-400 text-white"}`}>{openCount}</span>
+                {item.href === "/admin/support" && openReports > 0 ? (
+                  <span className={`rounded-full px-1.5 text-[10px] leading-4 ${active ? "bg-white text-slate-900" : "bg-rose-400 text-white"}`}>{openReports}</span>
+                ) : null}
+                {item.href === "/admin/desk" && openInquiries > 0 ? (
+                  <span className={`rounded-full px-1.5 text-[10px] leading-4 ${active ? "bg-white text-slate-900" : "bg-rose-400 text-white"}`}>{openInquiries}</span>
                 ) : null}
               </Link>
             );

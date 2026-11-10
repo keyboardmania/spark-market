@@ -129,21 +129,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       login(email, password) {
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPassword = password.trim();
-        if (!normalizedEmail) {
-          return fail("email", "이메일을 입력해 주세요.");
-        }
-        if (!normalizedEmail.includes("@")) {
-          return fail("email", "이메일 형식이 올바르지 않아요.");
-        }
         const account = ADMIN_ACCOUNTS.find((item) => item.email === normalizedEmail);
-        if (!account) {
-          return fail("email", "등록되지 않은 관리자 이메일이에요.");
-        }
-        if (!normalizedPassword) {
-          return fail("password", "비밀번호를 입력해 주세요.");
-        }
-        if (normalizedPassword !== ADMIN_DEMO.password) {
-          return fail("password", "비밀번호가 올바르지 않아요.");
+        if (!normalizedEmail || !normalizedPassword || !account || normalizedPassword !== ADMIN_DEMO.password) {
+          return fail("session", "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
         const next = { name: account.name, email: account.email, role: account.role };
         const stored = storeSession(next);
@@ -173,10 +161,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       addCategory(name) {
         const trimmed = name.trim();
         if (!trimmed) return;
-        setCategories((current) => [
-          ...current,
-          { id: `cat-${current.length + 1}-${trimmed.length}`, name: trimmed, slug: `custom-${current.length + 1}` },
-        ]);
+        setCategories((current) => {
+          if (current.some((item) => item.name.localeCompare(trimmed, "en", { sensitivity: "base" }) === 0)) return current;
+          return [...current, { id: `cat-${current.length + 1}-${trimmed.length}`, name: trimmed, slug: `custom-${current.length + 1}` }].sort((a, b) =>
+            a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+          );
+        });
       },
       updateCategory(id, name) {
         const trimmed = name.trim();
