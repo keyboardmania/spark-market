@@ -14,7 +14,6 @@ import {
   type Product,
   type ProductMedia,
 } from "@/data/mockData";
-import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductCard } from "@/components/spark/ProductCard";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -511,7 +510,6 @@ export function SellForm({ productId }: { productId?: string }) {
                   <div className="w-full">
                     <ProductCard product={item} />
                   </div>
-                  <ProductInquiry productId={item.id} compact />
                   <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 text-xs text-slate-400">
                     <Link href={`/sell/${item.id}`}>수정</Link>
                     <DeleteProductButton product={item} variant="text" />

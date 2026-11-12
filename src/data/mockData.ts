@@ -1516,6 +1516,44 @@ export const ORDERS: Order[] = [
     review: null,
   },
   {
+    id: "SPK-239901",
+    role: "sale",
+    productId: "cz-figure-glass",
+    title: "하이큐!! 히나타 쇼요 POP UP PARADE",
+    ip: "하이큐!!",
+    price: 86,
+    condition: "S급",
+    motif: "figure",
+    palette: sky,
+    imageUrl: "https://images.goodsmile.info/cgm/images/product/20210422/11123/84176/large/4500b348336afe75e8dfaed02bfcef65.jpg",
+    status: "결제완료",
+    orderedAt: "2026.10.27",
+    counterpart: "박민지",
+    address: "경기 고양시 일산동구 중앙로 44, 1201호",
+    paymentMethod: "신용/체크카드",
+    tracking: null,
+    review: null,
+  },
+  {
+    id: "SPK-239640",
+    role: "sale",
+    productId: "bl-ichigo-sp",
+    title: "블리치 쿠로사키 이치고 POP UP PARADE",
+    ip: "블리치",
+    price: 420,
+    condition: "S급",
+    motif: "figure",
+    palette: bleach,
+    imageUrl: "https://images.goodsmile.info/cgm/images/product/20231222/15374/125225/large/2e033625d59f9069d2a48715bb5a531e.jpg",
+    status: "구매확정",
+    orderedAt: "2026.10.08",
+    counterpart: "하루",
+    address: "서울 마포구 성산로 12, 302호",
+    paymentMethod: "토스페이",
+    tracking: "SPK3830104",
+    review: null,
+  },
+  {
     id: "SPK-240050",
     role: "purchase",
     productId: "chii-usagi-mini",
@@ -2233,12 +2271,43 @@ export type BankAccount = {
 
 export const BANK_LIMIT = 5;
 
+export type NotificationKind = "채팅" | "가격하락" | "거래" | "네고";
+
 export type AppNotification = {
   id: string;
-  kind: "채팅" | "가격하락" | "거래";
+  kind: NotificationKind;
   text: string;
   createdAt: string;
+  isRead: boolean;
+  href: string;
 };
+
+export const SEED_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: "ntf-nego-rukia",
+    kind: "네고",
+    text: "소라님이 '블리치 루키아 아크릴 스탠드' 상품에 가격 제안(네고)을 했습니다.",
+    createdAt: "10:24",
+    isRead: false,
+    href: "/chat/room-rukia-sale",
+  },
+  {
+    id: "ntf-pay-usagi",
+    kind: "거래",
+    text: "먼작귀 우사기 미니 피규어 상품 결제가 완료되었습니다.",
+    createdAt: "09:02",
+    isRead: false,
+    href: "/orders/SPK-240050",
+  },
+  {
+    id: "ntf-chat-slab",
+    kind: "채팅",
+    text: "카드서랍님의 채팅 메시지가 도착했습니다.",
+    createdAt: "어제",
+    isRead: true,
+    href: "/chat/room-charizard",
+  },
+];
 
 export type NotifyMode = "소리" | "진동" | "무음";
 

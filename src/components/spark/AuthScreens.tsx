@@ -111,7 +111,7 @@ export function LoginScreen() {
 
 export function SignupScreen() {
   const router = useRouter();
-  const { notify, isEmailTaken, registerAccount } = useSpark();
+  const { notify, isEmailTaken, registerAccount, findAccount, login } = useSpark();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -127,11 +127,15 @@ export function SignupScreen() {
   const codeSent = codeSentFor === emailKey && emailKey.length > 0;
   const verified = verifiedEmail === emailKey && emailKey.length > 0;
 
+  function enterAs(next: SparkUser, password = "") {
+    registerAccount({ ...next, password });
+    login(next);
+    notify(`${next.name}님, Spark에 오신 것을 환영해요.`);
+    router.push("/");
+  }
+
   function finishSignup(provider: SparkUser["provider"]) {
-    const next = { name: createNickname(), email: email.trim(), provider };
-    registerAccount({ ...next, password: provider === "email" ? password : "" });
-    notify("가입이 완료되었어요. 로그인해 주세요.");
-    router.push("/login");
+    enterAs({ name: createNickname(), email: email.trim(), provider }, provider === "email" ? password : "");
   }
 
   function onEmailChange(value: string) {
@@ -200,11 +204,19 @@ export function SignupScreen() {
       <SocialRow
         requireTerms
         onPick={(user) => {
-          if (!isEmailTaken(user.email)) {
-            registerAccount({ name: createNickname(), email: user.email, password: "", provider: user.provider });
+          if (isEmailTaken(user.email)) {
+            const existing = findAccount(user.email);
+            if (!existing || existing.provider !== user.provider) {
+              notify("이미 사용 중인 이메일입니다. 로그인해 주세요.");
+              router.push("/login");
+              return;
+            }
+            login(existing);
+            notify(`${existing.name}님, Spark에 오신 것을 환영해요.`);
+            router.push("/");
+            return;
           }
-          notify("가입이 완료되었어요. 로그인 화면에서 소셜 로그인을 다시 진행해 주세요.");
-          router.replace("/login");
+          enterAs({ name: createNickname(), email: user.email, provider: user.provider });
         }}
       />
       <form onSubmit={onSubmit} className="mt-6 space-y-3">

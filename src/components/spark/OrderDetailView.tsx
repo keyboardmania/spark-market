@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CANCEL_REASONS, SELLERS, formatPrice, getProductById } from "@/data/mockData";
-import { ProductInquiry } from "@/components/spark/ChatScreen";
-import { ORDER_STATUS_TONE } from "@/components/spark/OrdersView";
+import { orderTradePresentation } from "@/components/spark/OrdersView";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -84,6 +83,7 @@ export function OrderDetailView({ id }: { id: string }) {
   const canSubmit = reason !== "" && detailLength >= 10;
   const showCancelButton = !order.cancelRequest && order.status !== "구매확정" && order.status !== "거래취소";
   const cancelDisabled = order.status === "배송중";
+  const trade = orderTradePresentation(order.role, order.status);
 
   function openCancel() {
     setReason("");
@@ -100,11 +100,11 @@ export function OrderDetailView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <Link href="/orders" className="text-sm text-slate-500 hover:text-slate-900">
+      <Link href={order.role === "sale" ? "/orders?tab=sale" : "/orders?tab=buy"} className="text-sm text-slate-500 hover:text-slate-900">
         구매/판매 내역
       </Link>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${ORDER_STATUS_TONE[order.status]}`}>{order.status}</span>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${trade.tone}`}>{trade.label}</span>
         {order.cancelRequest && order.status !== "거래취소" ? (
           <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700">취소 요청중</span>
         ) : null}
@@ -173,8 +173,6 @@ export function OrderDetailView({ id }: { id: string }) {
             </div>
           </div>
         </section>
-
-        {order.role === "sale" ? <ProductInquiry productId={order.productId} /> : null}
 
         {order.role === "sale" ? (
           <section className="rounded-2xl border border-slate-200 p-4">

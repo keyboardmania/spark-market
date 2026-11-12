@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ADDRESS_LIMIT,
   BANK_LIMIT,
@@ -8,6 +8,7 @@ import {
   ORDERS,
   PRODUCTS,
   SELLER_REPLIES,
+  SEED_NOTIFICATIONS,
   TEST_VERIFICATION_CODE,
   formatPrice,
   formatTime,
@@ -46,6 +47,79 @@ export type RetentionNote = {
 };
 
 const RESERVED_EMAILS = new Set(["taken@spark.market"]);
+const AUTH_STORAGE_KEY = "spark-auth-session";
+const ACCOUNTS_STORAGE_KEY = "spark-accounts";
+const ACCESS_COOKIE = "spark_access";
+const REFRESH_COOKIE = "spark_refresh";
+const ACCESS_MAX_AGE = 60 * 60 * 24 * 7;
+const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
+
+type StoredAuth = {
+  accessToken: string;
+  refreshToken: string;
+  user: SparkUser;
+};
+
+function issueTokens(user: SparkUser) {
+  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    accessToken: `atk_${user.provider}_${stamp}`,
+    refreshToken: `rtk_${stamp}`,
+  };
+}
+
+function writeCookie(name: string, value: string, maxAge: number) {
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+}
+
+function clearCookie(name: string) {
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+function storeAuth(session: StoredAuth) {
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  writeCookie(ACCESS_COOKIE, session.accessToken, ACCESS_MAX_AGE);
+  writeCookie(REFRESH_COOKIE, session.refreshToken, REFRESH_MAX_AGE);
+}
+
+function readStoredAuth(): StoredAuth | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredAuth>;
+    if (!parsed.accessToken || !parsed.refreshToken || !parsed.user?.email || !parsed.user.name || !parsed.user.provider) return null;
+    return { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken, user: parsed.user };
+  } catch (error) {
+    console.error("[Spark] 저장된 로그인 세션을 읽지 못했어요.", error);
+    return null;
+  }
+}
+
+function clearStoredAuth() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    clearCookie(ACCESS_COOKIE);
+    clearCookie(REFRESH_COOKIE);
+  } catch (error) {
+    console.error("[Spark] 로그인 세션을 지우지 못했어요.", error);
+  }
+}
+
+function readStoredAccounts(): StoredAccount[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredAccount[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item.email === "string" && typeof item.name === "string");
+  } catch (error) {
+    console.error("[Spark] 저장된 계정을 읽지 못했어요.", error);
+    return [];
+  }
+}
 
 type SparkContextValue = {
   user: SparkUser | null;
@@ -89,6 +163,8 @@ type SparkContextValue = {
   addBank: (draft: Omit<BankAccount, "id">) => "ok" | "limit";
   removeBank: (id: string) => void;
   notifications: AppNotification[];
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
   notifyMode: NotifyMode;
   setNotifyMode: (mode: NotifyMode) => void;
   updateProfile: (patch: { name?: string; photoUrl?: string }) => void;
@@ -122,9 +198,10 @@ function expireCancelRequests(orders: Order[], now = Date.now()) {
 export function SparkProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SparkUser | null>(null);
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
+  const [accountsReady, setAccountsReady] = useState(false);
   const [locale, setLocale] = useState<LocaleId>("ko");
   const [banks, setBanks] = useState<BankAccount[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>(SEED_NOTIFICATIONS);
   const [notifyMode, setNotifyMode] = useState<NotifyMode>("소리");
   const [retention, setRetention] = useState<RetentionNote | null>(null);
   const shared = useShared();
@@ -150,6 +227,21 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200);
   }, []);
 
+  const pushNotice = useCallback((notice: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
+    if (notifyMode === "무음") return;
+    setNotifications((items) =>
+      [{ ...notice, id: crypto.randomUUID(), createdAt: formatTime(), isRead: false }, ...items].slice(0, 50),
+    );
+  }, [notifyMode]);
+
+  const markNotificationRead = useCallback((id: string) => {
+    setNotifications((items) => items.map((item) => (item.id === id ? { ...item, isRead: true } : item)));
+  }, []);
+
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((items) => (items.every((item) => item.isRead) ? items : items.map((item) => ({ ...item, isRead: true }))));
+  }, []);
+
   const products = useMemo(
     () =>
       records
@@ -159,12 +251,35 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   );
 
   const login = useCallback((next: SparkUser) => {
+    const tokens = issueTokens(next);
+    try {
+      storeAuth({ ...tokens, user: next });
+    } catch (error) {
+      console.error("[Spark] 로그인 세션을 저장하지 못했어요.", error);
+    }
     setUser(next);
   }, []);
 
   const logout = useCallback(() => {
+    clearStoredAuth();
     setUser(null);
   }, []);
+
+  useEffect(() => {
+    setAccounts(readStoredAccounts());
+    const stored = readStoredAuth();
+    if (stored) setUser(stored.user);
+    setAccountsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!accountsReady) return;
+    try {
+      window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    } catch (error) {
+      console.error("[Spark] 계정을 저장하지 못했어요.", error);
+    }
+  }, [accounts, accountsReady]);
 
   const isEmailTaken = useCallback(
     (email: string) => {
@@ -240,10 +355,8 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     (id: string, patch: Partial<Product>) => {
       const current = records.find((product) => product.id === id);
       if (!current || current.deletedAt || current.saleStatus === "판매완료") return false;
-      if (patch.price !== undefined && patch.price < current.price && wishlistIds.includes(id) && notifyMode !== "무음") {
-        setNotifications((items) =>
-          [{ id: crypto.randomUUID(), kind: "가격하락" as const, text: `${current.title} 가격이 내려갔어요.`, createdAt: formatTime() }, ...items].slice(0, 50),
-        );
+      if (patch.price !== undefined && patch.price < current.price && wishlistIds.includes(id)) {
+        pushNotice({ kind: "가격하락", text: `${current.title} 가격이 내려갔어요.`, href: `/products/${id}` });
       }
       setRecords((items) =>
         items.map((item) =>
@@ -254,7 +367,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       );
       return true;
     },
-    [notifyMode, records, wishlistIds],
+    [pushNotice, records, wishlistIds],
   );
 
   const softDeleteProduct = useCallback((id: string) => {
@@ -357,7 +470,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     setOrders((current) => expireCancelRequests(current));
   }, [orders]);
 
@@ -504,6 +617,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       ),
     );
     if (sender !== "me") return;
+    const counterpart = rooms.find((item) => item.id === roomId)?.sellerName ?? "상대";
     setTypingRoomId(roomId);
 
     const replyText = message.imageUrl
@@ -524,13 +638,13 @@ export function SparkProvider({ children }: { children: ReactNode }) {
         current.map((room) => (room.id === roomId ? { ...room, updatedAt: new Date().toISOString(), messages: [...room.messages, reply] } : room)),
       );
       setTypingRoomId((current) => (current === roomId ? null : current));
-      if (notifyMode !== "무음") {
-        setNotifications((items) =>
-          [{ id: crypto.randomUUID(), kind: "채팅" as const, text: "새 채팅 답장이 도착했어요.", createdAt: formatTime() }, ...items].slice(0, 50),
-        );
-      }
+      pushNotice({
+        kind: "채팅",
+        text: `${counterpart}님의 채팅 메시지가 도착했습니다.`,
+        href: `/chat/${roomId}`,
+      });
     }, 900);
-  }, [chatPausedUntil, notify, notifyMode]);
+  }, [chatPausedUntil, notify, pushNotice, rooms]);
 
   const requestPurchase = useCallback((roomId: string) => {
     const room = rooms.find((item) => item.id === roomId);
@@ -640,8 +754,13 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       ),
     );
     notify("결제가 완료되어 예치되었어요. 상품은 예약중이 되었습니다.");
+    pushNotice({
+      kind: "거래",
+      text: `${product.title} 상품 결제가 완료되었습니다.`,
+      href: `/orders/${orderId}-B`,
+    });
     return orderId;
-  }, [notify, records, rooms, user?.email, user?.membership, user?.name]);
+  }, [notify, pushNotice, records, rooms, user?.email, user?.membership, user?.name]);
 
   const markRead = useCallback((roomId: string) => {
     setRooms((current) => {
@@ -723,6 +842,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       retainUntil,
       token: hasTrades ? `enc:${user.email.length}:${user.email.slice(0, 2)}` : "",
     });
+    clearStoredAuth();
     setUser(null);
     notify(hasTrades ? "탈퇴했습니다. 거래 기록은 5년 보관 후 삭제됩니다." : "거래 내역이 없어 계정을 즉시 삭제했습니다.");
     return "ok" as const;
@@ -790,6 +910,8 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     addBank,
     removeBank,
     notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
     notifyMode,
     setNotifyMode,
     updateProfile,

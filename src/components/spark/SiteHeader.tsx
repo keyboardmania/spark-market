@@ -2,22 +2,28 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { CATEGORY_ROUTES, categoryHref, formatPrice } from "@/data/mockData";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CATEGORY_ROUTES, categoryHref, formatPrice, type AppNotification } from "@/data/mockData";
 import { LOCALES, translate } from "@/i18n";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { useMounted } from "@/components/spark/useMounted";
 
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, rooms, products, logout, locale, setLocale, notifications } = useSpark();
+  const { user, rooms, products, logout, locale, setLocale, notifications, markNotificationRead, markAllNotificationsRead } = useSpark();
+  const mounted = useMounted();
+  const sessionUser = mounted ? user : null;
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const unread = rooms.reduce((sum, room) => sum + room.unread, 0);
 
   useEffect(() => {
     setMenuOpen(false);
+    setNoticeOpen(false);
     setQuery("");
   }, [pathname]);
 
@@ -59,9 +65,16 @@ export function SiteHeader() {
             <Link href="/membership" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-medium leading-none text-slate-700 hover:bg-slate-50 lg:inline-flex">
               {t("membership")}
             </Link>
-            <IconLink href="/mypage#alerts" label={t("notifications")} badge={notifications.length} icon="bell" />
+            <NotificationBell
+              label={t("notifications")}
+              open={noticeOpen}
+              onOpenChange={setNoticeOpen}
+              notifications={notifications}
+              onRead={markNotificationRead}
+              onReadAll={markAllNotificationsRead}
+            />
             <IconLink href="/chat" label={t("chat")} badge={unread} />
-            {user ? (
+            {sessionUser ? (
               <button type="button" onClick={signOut} className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-500 hover:bg-slate-50 lg:inline-flex">
                 {t("logout")}
               </button>
@@ -137,7 +150,7 @@ export function SiteHeader() {
             <MenuLink href="/orders">{t("orders")}</MenuLink>
             <MenuLink href="/chat">{t("chat")}</MenuLink>
             <MenuLink href="/mypage">{t("mypage")}</MenuLink>
-            {user ? (
+            {sessionUser ? (
               <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
                 {t("logout")}
               </button>
@@ -214,16 +227,142 @@ function SearchField({
   );
 }
 
-function IconLink({ href, label, badge, icon = "chat" }: { href: string; label: string; badge: number; icon?: "chat" | "bell" }) {
+function IconLink({ href, label, badge }: { href: string; label: string; badge: number }) {
   return (
     <Link href={href} aria-label={badge > 0 ? `${label} ${badge}` : label} className="relative grid h-10 w-10 place-items-center rounded-full text-slate-700 hover:bg-slate-50">
-      {icon === "bell" ? <BellIcon /> : <ChatIcon />}
+      <ChatIcon />
       {badge > 0 ? (
-        <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-400 px-1 text-[10px] font-medium leading-4 text-white">
+        <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-medium leading-4 text-white">
           {badge}
         </span>
       ) : null}
     </Link>
+  );
+}
+
+function NotificationBell({
+  label,
+  open,
+  onOpenChange,
+  notifications,
+  onRead,
+  onReadAll,
+}: {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  notifications: AppNotification[];
+  onRead: (id: string) => void;
+  onReadAll: () => void;
+}) {
+  const router = useRouter();
+  const mounted = useMounted();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const unread = notifications.filter((item) => !item.isRead).length;
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(352, window.innerWidth - 24);
+    const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+    setPos({ top: rect.bottom + 8, left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(352, window.innerWidth - 24);
+      const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+      setPos({ top: rect.bottom + 8, left });
+    }
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      onOpenChange(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onOpenChange(false);
+    }
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onOpenChange, open]);
+
+  function openItem(item: AppNotification) {
+    onRead(item.id);
+    onOpenChange(false);
+    router.push(item.href);
+  }
+
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label={label}
+      className="fixed z-50 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+      style={{ top: pos.top, left: pos.left }}
+    >
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <p className="text-sm font-semibold text-slate-900">{label}</p>
+        <button type="button" onClick={onReadAll} disabled={unread === 0} className="text-xs font-medium text-rose-500 disabled:text-slate-300">
+          모두 읽음
+        </button>
+      </div>
+      <ul className="max-h-96 overflow-y-auto">
+        {notifications.length === 0 ? (
+          <li className="px-4 py-10 text-center text-sm text-slate-400">알림이 없어요.</li>
+        ) : (
+          notifications.map((item) => (
+            <li key={item.id}>
+              <button type="button" onClick={() => openItem(item)} className={`flex w-full gap-3 px-4 py-3 text-left hover:bg-slate-50 ${item.isRead ? "" : "bg-rose-50/60"}`}>
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-transparent" : "bg-rose-500"}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-medium text-slate-400">{item.kind}</span>
+                    <span className="shrink-0 text-[11px] text-slate-400">{item.createdAt}</span>
+                  </span>
+                  <span className={`mt-1 block text-sm leading-5 ${item.isRead ? "text-slate-500" : "font-medium text-slate-900"}`}>{item.text}</span>
+                </span>
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={unread > 0 ? `${label} ${unread}` : label}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(!open)}
+        className="relative grid h-10 w-10 place-items-center rounded-full text-slate-700 hover:bg-slate-50"
+      >
+        <BellIcon />
+        {unread > 0 ? (
+          <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-medium leading-4 text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : null}
+      </button>
+      {mounted && panel ? createPortal(panel, document.body) : null}
+    </>
   );
 }
 

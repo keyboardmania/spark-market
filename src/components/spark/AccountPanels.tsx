@@ -50,8 +50,8 @@ export function AccountPanels() {
             <ul className="mt-3 space-y-2">
               {notifications.length === 0 ? <li className="text-sm text-slate-400">알림이 없어요.</li> : null}
               {notifications.map((item) => (
-                <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                  <span className="text-xs text-slate-400">{item.kind} · {item.createdAt}</span>
+                <li key={item.id} className={`rounded-2xl border px-4 py-3 text-sm ${item.isRead ? "border-slate-200" : "border-rose-200 bg-rose-50/40"}`}>
+                  <span className="text-xs text-slate-400">{item.kind} · {item.createdAt}{item.isRead ? "" : " · 안 읽음"}</span>
                   <p className="text-slate-800">{item.text}</p>
                 </li>
               ))}
