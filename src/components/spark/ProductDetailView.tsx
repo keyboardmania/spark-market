@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatPrice, getSeller, type Product } from "@/data/mockData";
+import { useState } from "react";
+import { formatPrice, getSeller, orderMedia, viewCountOf, wishCountOf, type Product, type ProductMedia } from "@/data/mockData";
 import { SaleStatusText } from "@/components/spark/Badges";
 import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductVisual } from "@/components/spark/ProductVisual";
@@ -48,14 +49,7 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
 
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-      <ProductVisual
-        motif={product.motif}
-        palette={product.palette}
-        uid={`detail-${product.id}`}
-        imageUrl={product.imageUrl}
-        alt={product.title}
-        className="aspect-square rounded-2xl"
-      />
+      <ProductGallery key={product.id} product={product} />
 
       <div className="flex flex-col">
         <p className="text-xs tracking-wide text-slate-400">
@@ -69,14 +63,12 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
         <p className={`mt-4 text-3xl font-semibold tabular-nums tracking-tight ${sold ? "text-slate-400 line-through" : "text-slate-900"}`}>
           {formatPrice(product.price)}
         </p>
-        <p className="mt-2 text-sm text-slate-500">{product.shippingFee === 0 ? "무료배송" : `배송비 ${formatPrice(product.shippingFee)}`} · {product.location}</p>
+        <p className="mt-2 text-sm text-slate-500">{shippingLabel(product)} · {product.location}</p>
         <p className="mt-6 text-sm leading-7 text-slate-600">{product.description}</p>
 
         <dl className="mt-6 grid grid-cols-2 gap-3 text-sm">
-          <Info label="찜" value={`${product.likes + (wished ? 1 : 0)}`} />
-          <Info label="거래 방식" value="Spark 안전결제" />
-          <Info label="등록" value={product.postedLabel} />
-          <Info label="리뷰" value={sellerReviews.length === 0 ? "0" : `${(sellerReviews.reduce((sum, review) => sum + review.rating, 0) / sellerReviews.length).toFixed(1)} · ${sellerReviews.length}건`} />
+          <Info label="조회수" value={viewCountOf(product).toLocaleString("en-US")} />
+          <Info label="찜 수" value={wishCountOf(product, wished).toLocaleString("en-US")} />
         </dl>
 
         <Link
@@ -145,7 +137,11 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
             </button>
           )}
         </div>
-        <p className="mt-3 text-xs leading-5 text-slate-400">구매하기는 결제창으로 가지 않고, 판매자 채팅에 구매 신청 카드를 보냅니다.</p>
+        {mine || sold ? null : (
+          <p className="mt-3 text-xs leading-5 text-slate-400">
+            구매하기를 누르면 채팅이 열립니다. 판매중인 상품은 판매자에게 수락 요청이 전송되고, 수락되면 그 채팅에서 결제합니다.
+          </p>
+        )}
         <div className="mt-3 flex gap-4">
           <button type="button" onClick={() => toggleWishlist(product.id)} className="text-sm text-slate-500 underline-offset-4 hover:underline">
             {wished ? "찜 해제" : "찜하기"}
@@ -155,6 +151,70 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
       </div>
     </div>
   );
+}
+
+function galleryMedia(product: Product): ProductMedia[] {
+  if (product.media && product.media.length > 0) return orderMedia(product.media);
+  if (product.imageUrl) {
+    return [{ id: `${product.id}-cover`, name: product.title, kind: "image", url: product.imageUrl, displayOrder: 0, thumbnailed: true }];
+  }
+  return [];
+}
+
+function ProductGallery({ product }: { product: Product }) {
+  const items = galleryMedia(product);
+  const [index, setIndex] = useState(0);
+  const current = items[index] ?? items[0];
+
+  return (
+    <div>
+      {current?.kind === "video" ? (
+        <video src={current.url} controls className="aspect-square w-full rounded-2xl bg-slate-900 object-cover" />
+      ) : (
+        <ProductVisual
+          motif={product.motif}
+          palette={product.palette}
+          uid={`detail-${product.id}-${current?.id ?? "empty"}`}
+          imageUrl={current?.url ?? product.imageUrl}
+          alt={product.title}
+          className="aspect-square rounded-2xl"
+        />
+      )}
+      {items.length > 0 ? (
+        <ul className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="사진 목록">
+          {items.map((item, itemIndex) => {
+            const selected = item.id === current?.id;
+            return (
+              <li key={item.id} className="shrink-0">
+                <button
+                  type="button"
+                  aria-current={selected ? "true" : undefined}
+                  aria-label={`${item.kind === "video" ? "동영상" : "사진"} 순서 ${item.displayOrder ?? itemIndex}`}
+                  onClick={() => setIndex(itemIndex)}
+                  className={`relative h-16 w-16 overflow-hidden rounded-xl bg-slate-100 ${selected ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200"}`}
+                >
+                  {item.kind === "video" ? (
+                    <video src={item.url} muted className="h-full w-full object-cover" />
+                  ) : (
+                    <img src={item.url} alt="" className="h-full w-full object-cover" />
+                  )}
+                  {item.kind === "video" ? (
+                    <span className="absolute bottom-1 left-1 rounded-full bg-slate-900/80 px-1.5 py-0.5 text-[10px] text-white">동영상</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function shippingLabel(product: Product) {
+  if (product.shippingIncluded === true) return "배송비 포함";
+  if (product.shippingIncluded === false) return "배송비 별도";
+  return product.shippingFee === 0 ? "무료배송" : `배송비 ${formatPrice(product.shippingFee)}`;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

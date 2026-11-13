@@ -7,19 +7,24 @@ import {
   CATEGORIES,
   MAX_LIST_PRICE,
   ORIGINS,
-  averageSoldPrice,
+  SALE_STATUS_OPTIONS,
+  detectKeywordFromImage,
   formatPrice,
+  orderMedia,
+  quoteForKeyword,
+  representativeImage,
   type Category,
   type Origin,
   type Product,
   type ProductMedia,
+  type SaleStatus,
 } from "@/data/mockData";
 import { ProductCard } from "@/components/spark/ProductCard";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-const MEDIA_HINT = "최대 10개 첨부, 최소 1개 필수, 사진(png, jpg, jpeg), 동영상(mp4, mov)";
+const MEDIA_HINT = "사진첩에서만 선택 · 최소 1개, 최대 10개 · 사진(png, jpg, jpeg), 동영상(mp4, mov)";
 const MAX_MEDIA = 10;
 const SOLD_MESSAGE = "판매 완료된 상품은 수정할 수 없습니다.";
 
@@ -30,11 +35,11 @@ type Draft = {
   price: string;
   description: string;
   shippingIncluded: boolean;
-  shippingFee: string;
+  saleStatus: SaleStatus;
   media: ProductMedia[];
 };
 
-type FieldErrors = Partial<Record<"title" | "category" | "country" | "media" | "price" | "description" | "shippingFee", string>>;
+type FieldErrors = Partial<Record<"title" | "category" | "country" | "media" | "price" | "description", string>>;
 
 const EMPTY: Draft = {
   title: "",
@@ -42,8 +47,8 @@ const EMPTY: Draft = {
   country: "",
   price: "",
   description: "",
-  shippingIncluded: false,
-  shippingFee: "3",
+  shippingIncluded: true,
+  saleStatus: "판매중",
   media: [],
 };
 
@@ -84,12 +89,17 @@ function priceIssue(value: string) {
   return null;
 }
 
+function fileLabel(url: string) {
+  const leaf = url.split("?")[0]?.split("/").pop();
+  return leaf && leaf.length > 0 ? leaf : "사진";
+}
+
 function draftFrom(product: Product): Draft {
-  const media =
+  const source =
     product.media && product.media.length > 0
       ? product.media
       : product.imageUrl
-        ? [{ id: `${product.id}-image`, name: "등록된 사진", kind: "image" as const, url: product.imageUrl }]
+        ? [{ id: `${product.id}-image`, name: fileLabel(product.imageUrl), kind: "image" as const, url: product.imageUrl }]
         : [];
   return {
     title: product.title,
@@ -97,9 +107,9 @@ function draftFrom(product: Product): Draft {
     country: product.country ?? "",
     price: String(product.price),
     description: product.description,
-    shippingIncluded: product.shippingFee === 0 || product.shippingIncluded === true,
-    shippingFee: product.shippingFee === 0 ? "" : String(product.shippingFee),
-    media,
+    shippingIncluded: product.shippingIncluded ?? product.shippingFee === 0,
+    saleStatus: product.saleStatus,
+    media: orderMedia(source),
   };
 }
 
@@ -115,6 +125,17 @@ function readFile(file: File) {
   });
 }
 
+function moveItem(media: ProductMedia[], id: string, direction: -1 | 1) {
+  const ordered = orderMedia(media);
+  const index = ordered.findIndex((item) => item.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= ordered.length) return ordered;
+  const next = [...ordered];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return orderMedia(next.map((entry, order) => ({ ...entry, displayOrder: order })));
+}
+
 export function SellForm({ productId }: { productId?: string }) {
   const router = useRouter();
   const { addProduct, updateProduct, products, isProductDeleted, notify } = useSpark();
@@ -125,14 +146,14 @@ export function SellForm({ productId }: { productId?: string }) {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [quote, setQuote] = useState<string | null>(null);
   const [soldOpen, setSoldOpen] = useState(false);
   const editing = Boolean(productId);
   const product = productId ? products.find((item) => item.id === productId) : undefined;
   const deleted = productId ? isProductDeleted(productId) : false;
   const locked = product?.saleStatus === "판매완료";
   const palette = paletteFor(draft.category);
-  const firstImage = draft.media.find((item) => item.kind === "image");
+  const media = orderMedia(draft.media);
+  const cover = representativeImage(media);
 
   const preview: Product = {
     id: product?.id ?? "preview",
@@ -142,19 +163,19 @@ export function SellForm({ productId }: { productId?: string }) {
     country: draft.country || undefined,
     price: /^\d+$/.test(draft.price) ? Number(draft.price) : 0,
     condition: product?.condition ?? "S급",
-    saleStatus: editing ? (product?.saleStatus ?? "판매중") : "판매중",
+    saleStatus: draft.saleStatus,
     description: draft.description.trim(),
     sellerId: product?.sellerId ?? "me",
     likes: product?.likes ?? 0,
     motif: motifFor(draft.category),
     palette,
-    shippingFee: draft.shippingIncluded ? 0 : /^\d+(\.\d+)?$/.test(draft.shippingFee) ? Number(draft.shippingFee) : 0,
+    shippingFee: 0,
     shippingIncluded: draft.shippingIncluded,
-    location: product?.location ?? "서울 · 택배",
+    location: product?.location ?? "택배",
     postedOrder: product?.postedOrder ?? 99,
     postedLabel: product?.postedLabel ?? "방금",
-    imageUrl: firstImage?.url,
-    media: draft.media,
+    imageUrl: cover?.url,
+    media,
   };
 
   const mine = mounted ? products.filter((item) => item.sellerId === "me" && item.id !== "preview") : [];
@@ -174,40 +195,9 @@ export function SellForm({ productId }: { productId?: string }) {
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft((current) => ({ ...current, [key]: value }));
-    setErrors((current) => ({ ...current, [key]: undefined }));
-  }
-
-  function addSample() {
-    if (draft.media.length >= MAX_MEDIA) {
-      setErrors((current) => ({ ...current, media: "최대 10개까지 첨부할 수 있어요." }));
-      return;
+    if (key !== "saleStatus" && key !== "shippingIncluded") {
+      setErrors((current) => ({ ...current, [key]: undefined }));
     }
-    const canvas = document.createElement("canvas");
-    canvas.width = 800;
-    canvas.height = 800;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.fillStyle = palette.soft;
-    context.fillRect(0, 0, 800, 800);
-    context.fillStyle = "#ffffff";
-    context.fillRect(170, 120, 460, 560);
-    context.fillStyle = palette.accent;
-    context.beginPath();
-    context.arc(400, 390, 96, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = palette.ink;
-    context.font = "28px sans-serif";
-    context.textAlign = "center";
-    context.fillText(draft.title.trim() || "Spark", 400, 250);
-    const url = canvas.toDataURL("image/png");
-    setDraft((current) => {
-      if (current.media.length >= MAX_MEDIA) return current;
-      return {
-        ...current,
-        media: [...current.media, { id: crypto.randomUUID(), name: "sample.png", kind: "image", url }],
-      };
-    });
-    setErrors((current) => ({ ...current, media: undefined }));
   }
 
   async function onFiles(files: FileList | null) {
@@ -232,11 +222,15 @@ export function SellForm({ productId }: { productId?: string }) {
         url: await readFile(file),
       })),
     );
-    setDraft((current) => ({ ...current, media: [...current.media, ...loaded].slice(0, MAX_MEDIA) }));
+    setDraft((current) => ({ ...current, media: orderMedia([...current.media, ...loaded]) }));
   }
 
   function removeMedia(id: string) {
-    setDraft((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
+    setDraft((current) => ({ ...current, media: orderMedia(current.media.filter((item) => item.id !== id)) }));
+  }
+
+  function moveMedia(id: string, direction: -1 | 1) {
+    setDraft((current) => ({ ...current, media: moveItem(current.media, id, direction) }));
   }
 
   function validate(next: Draft) {
@@ -246,7 +240,6 @@ export function SellForm({ productId }: { productId?: string }) {
     if (!next.country) nextErrors.country = "국가를 선택해 주세요.";
     if (next.media.length < 1) nextErrors.media = `최소 1개 이상 첨부해 주세요. ${MEDIA_HINT}`;
     else if (next.media.length > MAX_MEDIA) nextErrors.media = "최대 10개까지 첨부할 수 있어요.";
-    if (!next.shippingIncluded && !/^\d+(\.\d{1,2})?$/.test(next.shippingFee)) nextErrors.shippingFee = "별도 배송비는 0 이상의 숫자로 입력해 주세요.";
     const priceMessage = priceIssue(next.price);
     if (priceMessage) nextErrors.price = priceMessage;
     if (next.description.trim().length < 10) nextErrors.description = "상품 설명은 10자 이상 입력해 주세요.";
@@ -265,6 +258,8 @@ export function SellForm({ productId }: { productId?: string }) {
     if (Object.values(nextErrors).some(Boolean)) return;
     if (!draft.category || !draft.country) return;
 
+    const ordered = orderMedia(draft.media);
+    const thumb = representativeImage(ordered);
     const description = draft.description.trim();
     const saved: Product = {
       ...preview,
@@ -273,9 +268,13 @@ export function SellForm({ productId }: { productId?: string }) {
       category: draft.category,
       country: draft.country,
       price: Number(draft.price),
+      saleStatus: draft.saleStatus,
       description,
-      imageUrl: firstImage?.url,
-      media: draft.media,
+      shippingIncluded: draft.shippingIncluded,
+      shippingFee: 0,
+      viewCount: editing ? product?.viewCount : 0,
+      imageUrl: thumb?.url,
+      media: ordered,
     };
 
     if (editing && product) {
@@ -324,7 +323,9 @@ export function SellForm({ productId }: { productId?: string }) {
       <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">SELL</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{editing ? "상품 수정" : "상품 등록"}</h1>
       <p className="mt-2 text-sm text-slate-500">
-        {editing ? "입력하는 즉시 오른쪽 카드에 반영돼요." : "사진, 상품 정보, 가격만 입력하면 판매중으로 등록돼요."}
+        {editing
+          ? "판매 상태, 미디어 순서, 상품 정보를 수정할 수 있어요. 판매완료 매물은 잠깁니다."
+          : "사진첩에서 미디어를 올리고 판매 상태를 고르세요. 기본값은 판매중입니다."}
       </p>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -333,6 +334,7 @@ export function SellForm({ productId }: { productId?: string }) {
             <div>
               <p className="text-xs font-medium text-slate-500">사진 / 동영상</p>
               <p className="mt-1 text-xs leading-5 text-slate-400">{MEDIA_HINT}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">맨 앞 사진이 대표 이미지입니다. 순서를 바꾸면 대표도 바뀌고, 동영상은 대표와 AI 시세에서 빠집니다.</p>
               <Link href="/prohibited" className="mt-1 inline-flex text-xs font-medium text-slate-700 underline-offset-4 hover:underline">판매 금지 품목</Link>
               <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
                 <input
@@ -343,41 +345,68 @@ export function SellForm({ productId }: { productId?: string }) {
                   className="sr-only"
                   onChange={(event) => void onFiles(event.target.files)}
                 />
-                <div className="flex flex-wrap items-center gap-3">
-                  {draft.media.length === 0 ? (
-                    <div className="grid h-24 w-24 place-items-center rounded-xl bg-white text-xs text-slate-400">미리보기</div>
-                  ) : (
-                    draft.media.map((item) => (
-                      <div key={item.id} className="relative">
-                        {item.kind === "video" ? (
-                          <video src={item.url} className="h-24 w-24 rounded-xl bg-slate-900 object-cover" muted />
-                        ) : (
-                          <img src={item.url} alt={item.name} className="h-24 w-24 rounded-xl object-cover" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeMedia(item.id)}
-                          className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-white text-xs text-slate-500 shadow"
-                          aria-label={`${item.name} 삭제`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {media.length === 0 ? (
+                  <div className="grid h-24 w-24 place-items-center rounded-xl bg-white text-xs text-slate-400">미리보기</div>
+                ) : (
+                  <ul className="flex flex-wrap gap-3" aria-label="미디어 순서">
+                    {media.map((item, index) => (
+                      <li key={item.id} className="w-24">
+                        <div className="relative">
+                          {item.kind === "video" ? (
+                            <video src={item.url} className="h-24 w-24 rounded-xl bg-slate-900 object-cover" muted />
+                          ) : (
+                            <img src={item.url} alt={item.name} className="h-24 w-24 rounded-xl object-cover" />
+                          )}
+                          <span className="absolute left-1 top-1 rounded-full bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                            {item.thumbnailed ? "대표" : item.kind === "video" ? "동영상" : index + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMedia(item.id)}
+                            className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-white text-xs text-slate-500 shadow"
+                            aria-label={`${item.name} 삭제`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <p className="mt-1 truncate text-center text-[10px] text-slate-400" title={item.name}>
+                          순서 {item.displayOrder ?? index}
+                        </p>
+                        <div className="mt-1 flex justify-center gap-1">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => moveMedia(item.id, -1)}
+                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-30"
+                            aria-label={`${item.name} 순서를 앞으로`}
+                          >
+                            앞
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === media.length - 1}
+                            onClick={() => moveMedia(item.id, 1)}
+                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-30"
+                            aria-label={`${item.name} 순서를 뒤로`}
+                          >
+                            뒤
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => fileRef.current?.click()} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm">
-                    파일 올리기
+                    사진첩에서 선택
                   </button>
-                  <button type="button" onClick={addSample} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm">
-                    샘플 사진
-                  </button>
-                  <span className="text-xs text-slate-400">{draft.media.length}/{MAX_MEDIA}</span>
+                  <span className="text-xs text-slate-400">{media.length}/{MAX_MEDIA}</span>
                 </div>
               </div>
               {errors.media ? <p className="mt-2 text-xs text-rose-600">{errors.media}</p> : null}
             </div>
+
+            <AiQuotePanel image={cover} />
 
             <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">상품명</span>
@@ -409,6 +438,16 @@ export function SellForm({ productId }: { productId?: string }) {
             </div>
 
             <label className="block space-y-2">
+              <span className="text-xs font-medium text-slate-500">판매 상태</span>
+              <select value={draft.saleStatus} onChange={(event) => update("saleStatus", event.target.value as SaleStatus)} className={fieldClass}>
+                {SALE_STATUS_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.status}>{option.label}</option>
+                ))}
+              </select>
+              <span className="block text-xs text-slate-400">신규 등록 기본값은 판매중(ON_SALE)입니다.</span>
+            </label>
+
+            <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">가격 (USD)</span>
               <input
                 inputMode="numeric"
@@ -422,60 +461,34 @@ export function SellForm({ productId }: { productId?: string }) {
               </span>
             </label>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <button
-                type="button"
-                className="text-sm font-medium text-slate-700 underline-offset-4 hover:underline"
-                onClick={() => {
-                  if (!draft.category) {
-                    setQuote("물품 종류를 먼저 선택해 주세요.");
-                    return;
-                  }
-                  const average = averageSoldPrice(draft.category, products);
-                  setQuote(average === null ? "최근 판매완료 거래가 없어 시세를 낼 수 없어요." : `같은 분류의 최근 판매완료 평균은 ${formatPrice(average)}이에요.`);
-                }}
-              >
-                AI 시세 보기
-              </button>
-              {quote ? <span className="text-xs text-slate-500">{quote}</span> : null}
-            </div>
-
             <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">설명</span>
               <textarea
                 value={draft.description}
                 onChange={(event) => update("description", event.target.value)}
                 rows={4}
-                placeholder="구성품, 사용감, 거래 방식을 10자 이상 적어 주세요."
+                placeholder="구성품, 사용감을 10자 이상 적어 주세요."
                 className={`${fieldClass} resize-y`}
               />
               {errors.description ? <span className="block text-xs text-rose-600">{errors.description}</span> : null}
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium text-slate-500">배송비</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {(["포함", "별도"] as const).map((item) => {
-                    const included = item === "포함";
-                    const active = draft.shippingIncluded === included;
-                    return (
-                      <button key={item} type="button" aria-pressed={active} onClick={() => update("shippingIncluded", included)} className={`rounded-full px-3 py-2.5 text-sm ${active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500"}`}>
-                        {item}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">배송비</p>
+              <div className="mt-2 grid max-w-xs grid-cols-2 gap-2">
+                {(["포함", "별도"] as const).map((item) => {
+                  const included = item === "포함";
+                  const active = draft.shippingIncluded === included;
+                  return (
+                    <button key={item} type="button" aria-pressed={active} onClick={() => update("shippingIncluded", included)} className={`rounded-full px-3 py-2.5 text-sm ${active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500"}`}>
+                      {item}
+                    </button>
+                  );
+                })}
               </div>
-              {draft.shippingIncluded ? (
-                <p className="self-end pb-2.5 text-sm text-slate-400">배송비가 상품 가격에 포함돼요.</p>
-              ) : (
-                <label className="block space-y-2">
-                  <span className="text-xs font-medium text-slate-500">배송비 (USD)</span>
-                  <input inputMode="decimal" value={draft.shippingFee} onChange={(event) => update("shippingFee", event.target.value.replace(/[^\d.]/g, ""))} className={fieldClass} />
-                  {errors.shippingFee ? <span className="block text-xs text-rose-600">{errors.shippingFee}</span> : null}
-                </label>
-              )}
+              <p className="mt-2 text-xs text-slate-400">
+                {draft.shippingIncluded ? "배송비가 상품 가격에 포함돼요." : "배송비는 상품 가격과 별도예요."}
+              </p>
             </div>
 
             {Object.values(errors).some(Boolean) ? <p role="alert" className="text-sm text-rose-600">입력한 내용을 다시 확인해 주세요.</p> : null}
@@ -538,6 +551,39 @@ export function SellForm({ productId }: { productId?: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AiQuotePanel({ image }: { image: ProductMedia | null }) {
+  if (!image) {
+    return (
+      <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4" aria-label="AI 시세">
+        <p className="text-xs font-medium text-slate-500">AI 시세</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">대표 사진을 올리면 감지 키워드와 최근 판매완료 100개의 평균가를 나란히 보여 드려요. 동영상은 분석하지 않아요.</p>
+      </section>
+    );
+  }
+
+  const keyword = detectKeywordFromImage(image.name, image.url);
+  const quote = quoteForKeyword(keyword);
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4" aria-label="AI 시세">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-xs font-medium text-slate-500">AI 시세</p>
+        <p className="truncate text-[11px] text-slate-400">대표 이미지 · {image.name}</p>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-white px-3 py-3">
+          <p className="text-[11px] text-slate-400">감지 키워드</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">{keyword}</p>
+        </div>
+        <div className="rounded-xl bg-white px-3 py-3">
+          <p className="text-[11px] text-slate-400">최근 판매완료 {quote.sampleSize}개 평균</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatPrice(quote.average)}</p>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { formatPrice, getProductById, getSeller, settlementOf, type ChatMessage, type Product } from "@/data/mockData";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { formatPrice, getProductById, getSeller, needsCustomsNumber, type ChatMessage, type Product, type ShippingAddress } from "@/data/mockData";
 import { ReportButton } from "@/components/spark/ReportDialog";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
@@ -11,12 +11,12 @@ import { useMounted } from "@/components/spark/useMounted";
 
 const EMOJIS = ["✨", "💖", "🧸", "😊", "🙌", "🎀", "😭", "⚡"];
 
+const PAYMENT_METHODS = ["신용/체크카드", "휴대폰", "페이팔", "애플페이", "구글페이"] as const;
+
 export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const mounted = useMounted();
-  const { rooms, products, user, addresses, isProductDeleted, typingRoomId, sendMessage, markRead, leaveRoom, notify, requestPurchase, decidePurchase, completePurchase } = useSpark();
+  const { rooms, products, addresses, isProductDeleted, typingRoomId, sendMessage, markRead, leaveRoom, notify, decidePurchase, completePurchase } = useSpark();
   const [activeId, setActiveId] = useState(initialRoomId ?? "room-hinata");
-  const [role, setRole] = useState<"buyer" | "seller">("buyer");
-  const [approvalOpen, setApprovalOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -32,6 +32,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
       ? null
       : products.find((item) => item.id === active.productId) ?? getProductById(active.productId)
     : null;
+  const isSeller = product?.sellerId === "me";
 
   useEffect(() => {
     const timer = window.setTimeout(() => setConnected(true), 700);
@@ -43,8 +44,8 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   }, [active?.id, markRead]);
 
   useEffect(() => {
-    if (role === "seller" && active?.purchase?.status === "대기") setApprovalOpen(true);
-  }, [role, active?.id, active?.purchase?.status]);
+    setPayOpen(false);
+  }, [active?.id]);
 
   useEffect(() => {
     const thread = threadRef.current;
@@ -80,7 +81,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   function submit() {
     const text = draft.trim();
     if (!active || !text) return;
-    sendMessage(active.id, { text, sender: role === "seller" ? "seller" : "me" });
+    sendMessage(active.id, { text, sender: "me" });
     setDraft("");
     setEmojiOpen(false);
   }
@@ -100,7 +101,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        sendMessage(active.id, { imageUrl: reader.result, text: "사진을 보냈어요.", sender: role === "seller" ? "seller" : "me" });
+        sendMessage(active.id, { imageUrl: reader.result, text: "사진을 보냈어요.", sender: "me" });
       }
     };
     reader.readAsDataURL(file);
@@ -156,7 +157,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                 </button>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900">{roomTitle(active, products)}</p>
-                  <p className="text-xs text-slate-400">{active.sellerHandle}</p>
+                  <p className="text-xs text-slate-400">{isSeller ? "내 판매 상품" : active.sellerHandle}</p>
                 </div>
                 <ReportButton
                   targetType="유저"
@@ -179,28 +180,20 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
               </div>
               <div ref={threadRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/40 px-4 py-4">
                 {active.messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} mine={role === "seller" ? message.sender === "seller" : message.sender === "me"} />
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    mine={message.sender === "me"}
+                    footer={messageFooter(message, {
+                      isSeller,
+                      status: active.purchase?.status,
+                      onAccept: () => decidePurchase(active.id, true),
+                      onReject: () => decidePurchase(active.id, false),
+                      onPay: () => setPayOpen(true),
+                    })}
+                  />
                 ))}
                 {typingRoomId === active.id ? <p className="text-xs text-slate-400">상대방이 입력 중이에요.</p> : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-3 py-2">
-                <div className="flex rounded-full bg-slate-50 p-1 text-xs">
-                  {(["buyer", "seller"] as const).map((item) => (
-                    <button key={item} type="button" onClick={() => setRole(item)} className={`rounded-full px-3 py-1.5 ${role === item ? "bg-white font-medium text-slate-900" : "text-slate-400"}`}>
-                      {item === "buyer" ? "구매자" : "판매자"}
-                    </button>
-                  ))}
-                </div>
-                {role === "buyer" && product.saleStatus === "판매중" && active.purchase?.status !== "대기" && active.purchase?.status !== "승인" && active.purchase?.status !== "결제완료" ? (
-                  <button type="button" className={primaryButtonClass} onClick={() => requestPurchase(active.id)}>구매 신청</button>
-                ) : null}
-                {role === "buyer" && active.purchase?.status === "승인" ? (
-                  <button type="button" className={primaryButtonClass} onClick={() => setPayOpen(true)}>결제 정보 입력</button>
-                ) : null}
-                {role === "seller" && active.purchase?.status === "대기" ? (
-                  <button type="button" className={ghostButtonClass} onClick={() => setApprovalOpen(true)}>판매 승인</button>
-                ) : null}
-                {active.purchase ? <span className="text-xs text-slate-400">신청 상태 {active.purchase.status}</span> : null}
               </div>
               <form
                 className="border-t border-slate-100 p-3"
@@ -232,26 +225,10 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                   </button>
                 </div>
               </form>
-              {approvalOpen && active.purchase?.status === "대기" ? (
-                <SellerApproval
+              {payOpen && !isSeller && active.purchase?.status === "승인" ? (
+                <PaymentSheet
                   product={product}
-                  vip={Boolean(user?.membership === "vip" && product.sellerId === "me")}
-                  defaultAddress={addresses.find((item) => item.isDefault)}
-                  onClose={() => setApprovalOpen(false)}
-                  onReject={(address, account) => {
-                    decidePurchase(active.id, false, address, account);
-                    setApprovalOpen(false);
-                  }}
-                  onAccept={(address, account) => {
-                    decidePurchase(active.id, true, address, account);
-                    setApprovalOpen(false);
-                  }}
-                />
-              ) : null}
-              {payOpen && active.purchase?.status === "승인" ? (
-                <BuyerPayment
-                  product={product}
-                  defaultAddress={addresses.find((item) => item.isDefault)}
+                  addresses={addresses}
                   onClose={() => setPayOpen(false)}
                   onPay={(payment) => {
                     completePurchase(active.id, payment);
@@ -267,6 +244,41 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
       </div>
     </div>
   );
+}
+
+function messageFooter(
+  message: ChatMessage,
+  actions: {
+    isSeller: boolean;
+    status?: string;
+    onAccept: () => void;
+    onReject: () => void;
+    onPay: () => void;
+  },
+) {
+  if (message.kind === "purchase" && actions.status === "대기" && actions.isSeller) {
+    return (
+      <div className="mt-3 flex gap-2">
+        <button type="button" className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700" onClick={actions.onReject}>
+          거절
+        </button>
+        <button type="button" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={actions.onAccept}>
+          수락
+        </button>
+      </div>
+    );
+  }
+  if (message.kind === "purchase" && actions.status === "대기" && !actions.isSeller) {
+    return <p className="mt-1 text-xs text-slate-400">판매자의 수락을 기다립니다.</p>;
+  }
+  if (message.kind === "payment" && actions.status === "승인" && !actions.isSeller) {
+    return (
+      <button type="button" className={`${primaryButtonClass} mt-3`} onClick={actions.onPay}>
+        결제하기
+      </button>
+    );
+  }
+  return null;
 }
 
 function roomTitle(room: { productId: string; sellerName: string }, products: Product[]) {
@@ -314,19 +326,33 @@ export function ProductInquiry({ productId, compact = false }: { productId: stri
   );
 }
 
-function MessageBubble({ message, compact = false, mine = message.sender === "me" }: { message: ChatMessage; compact?: boolean; mine?: boolean }) {
-  const canTranslate = !mine && Boolean(message.originalText && message.translatedText);
+function MessageBubble({ message, compact = false, mine = message.sender === "me", footer = null }: { message: ChatMessage; compact?: boolean; mine?: boolean; footer?: ReactNode }) {
+  const canTranslate = !mine && message.sender !== "system" && Boolean(message.originalText && message.translatedText);
   const [showOriginal, setShowOriginal] = useState(false);
   const body = canTranslate ? (showOriginal ? message.originalText : message.translatedText) : message.text;
+  const system = message.sender === "system";
+
+  if (system) {
+    return (
+      <div className="flex justify-center">
+        <div className={`w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-3 text-slate-900 shadow-sm ${compact ? "text-xs" : "text-sm"}`}>
+          <p className="text-[11px] font-medium tracking-[0.16em] text-slate-400">{message.kind === "payment" ? "결제 안내" : "안내"}</p>
+          <p className="mt-1 font-medium leading-6">{body}</p>
+          {footer}
+          <span className="mt-2 block text-[10px] text-slate-400">{message.at}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex min-w-0 ${mine ? "justify-end" : "justify-start"}`}>
       <div className={`flex min-w-0 flex-col gap-1 ${compact ? "max-w-full" : "max-w-[78%]"} ${mine ? "items-end" : "items-start"}`}>
         {message.kind === "purchase" ? (
           <div className={`w-full rounded-2xl border border-slate-200 bg-white p-3 text-slate-900 shadow-sm ${compact ? "text-xs" : "text-sm"}`}>
-            <p className="text-[11px] font-medium tracking-[0.16em] text-slate-400">구매 신청</p>
+            <p className="text-[11px] font-medium tracking-[0.16em] text-slate-400">수락 요청</p>
             <p className="mt-1 font-medium leading-6">{body}</p>
-            <p className="mt-1 text-xs text-slate-400">판매자의 수락을 기다립니다.</p>
+            {footer}
           </div>
         ) : (
           <div className={`overflow-hidden break-words rounded-2xl px-3 py-2 leading-6 ${compact ? "text-xs" : "text-sm"} ${mine ? "rounded-br-md bg-slate-900 text-white" : "rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200"}`}>
@@ -351,107 +377,133 @@ function MessageBubble({ message, compact = false, mine = message.sender === "me
   );
 }
 
-function SellerApproval({
-  product,
-  vip,
-  defaultAddress,
-  onClose,
-  onAccept,
-  onReject,
-}: {
-  product: Product;
-  vip: boolean;
-  defaultAddress?: { address: string; detail: string; postalCode: string };
-  onClose: () => void;
-  onAccept: (address: string, account: string) => void;
-  onReject: (address: string, account: string) => void;
-}) {
-  const money = settlementOf(product.price, vip);
-  const filled = defaultAddress ? `(${defaultAddress.postalCode}) ${defaultAddress.address} ${defaultAddress.detail}` : "";
-  const [address, setAddress] = useState(filled);
-  const [account, setAccount] = useState("");
-  const ready = address.trim().length > 0 && account.trim().length > 0;
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
-      <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6">
-        <h2 className="text-lg font-semibold text-slate-900">판매 승인</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">기본 배송지와 정산 계좌를 확인한 뒤 승인하거나 거절하세요. 거절하면 상품은 판매중으로 남습니다.</p>
-        <label className="mt-4 block space-y-2 text-xs text-slate-500">판매자 주소
-          <input value={address} onChange={(event) => setAddress(event.target.value)} className={fieldClass} />
-        </label>
-        <label className="mt-3 block space-y-2 text-xs text-slate-500">정산 계좌
-          <input value={account} onChange={(event) => setAccount(event.target.value)} placeholder="은행 · 계좌번호 · 예금주" className={fieldClass} />
-        </label>
-        <dl className="mt-4 space-y-2 text-sm">
-          <div className="flex justify-between"><dt className="text-slate-500">상품 금액</dt><dd>{formatPrice(product.price)}</dd></div>
-          <div className="flex justify-between"><dt className="text-slate-500">수수료 {Math.round(money.feeRate * 100)}%</dt><dd>{formatPrice(money.feeAmount)}</dd></div>
-          <div className="flex justify-between font-semibold"><dt>정산 예정액</dt><dd>{formatPrice(money.payoutAmount)}</dd></div>
-        </dl>
-        <p className="mt-3 text-xs leading-5 text-slate-400">수수료는 판매자 정산 때 빠집니다. USD 결제액만 고정되고 환율 숫자는 표시하지 않습니다.</p>
-        <div className="mt-5 flex gap-2">
-          <button type="button" className={ghostButtonClass} onClick={() => onReject(address, account)}>거절</button>
-          <button type="button" disabled={!ready} className={primaryButtonClass} onClick={() => onAccept(address.trim(), account.trim())}>승인</button>
-          <button type="button" className={ghostButtonClass} onClick={onClose}>닫기</button>
-        </div>
-      </div>
-    </div>
-  );
+function addressLine(item: ShippingAddress) {
+  return `${item.address} ${item.detail}`.trim();
 }
 
-function BuyerPayment({
+function formatDestination(item: ShippingAddress) {
+  return `${item.name} · ${item.phone} · (${item.postalCode}) ${item.address} ${item.detail}`;
+}
+
+function PaymentSheet({
   product,
-  defaultAddress,
+  addresses,
   onClose,
   onPay,
 }: {
   product: Product;
-  defaultAddress?: { name: string; address: string; detail: string; postalCode: string };
+  addresses: ShippingAddress[];
   onClose: () => void;
   onPay: (payment: { address: string; customsNumber: string; paymentMethod: string }) => void;
 }) {
-  const filled = defaultAddress ? `${defaultAddress.name} (${defaultAddress.postalCode}) ${defaultAddress.address} ${defaultAddress.detail}` : "";
-  const [address, setAddress] = useState(filled);
-  const [customsNumber, setCustomsNumber] = useState("");
+  const fallback = addresses.find((item) => item.isDefault) ?? addresses[0];
+  const [addressId, setAddressId] = useState(fallback?.id ?? "");
   const [method, setMethod] = useState("");
   const [terms, setTerms] = useState(false);
+  const [customsNumber, setCustomsNumber] = useState("");
+  const selected = addresses.find((item) => item.id === addressId) ?? null;
+  const destination = selected ? addressLine(selected) : "";
+  const showCustoms = needsCustomsNumber(product, destination);
+  const ready = Boolean(selected && method && terms && (!showCustoms || customsNumber.trim()));
   const total = product.price + product.shippingFee;
-  const ready = address.trim() && customsNumber.trim() && method && terms;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/40" onClick={onClose}>
       <form
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-2xl bg-white p-6"
+        aria-labelledby="payment-sheet-title"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white px-5 pt-4 pb-6 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!ready) return;
-          onPay({ address: address.trim(), customsNumber: customsNumber.trim(), paymentMethod: method });
+          if (!ready || !selected) return;
+          onPay({
+            address: formatDestination(selected),
+            customsNumber: showCustoms ? customsNumber.trim() : "",
+            paymentMethod: method,
+          });
         }}
       >
-        <h2 className="text-lg font-semibold text-slate-900">결제 정보</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">결제하면 PG사 예치가 완료된 것으로 기록되고, 상품 금액과 수수료율이 고정됩니다.</p>
-        <label className="mt-4 block space-y-2 text-xs text-slate-500">배송지
-          <input value={address} onChange={(event) => setAddress(event.target.value)} className={fieldClass} />
-        </label>
-        <label className="mt-3 block space-y-2 text-xs text-slate-500">통관번호
-          <input value={customsNumber} onChange={(event) => setCustomsNumber(event.target.value)} className={fieldClass} />
-        </label>
-        <label className="mt-3 block space-y-2 text-xs text-slate-500">결제수단
-          <select value={method} onChange={(event) => setMethod(event.target.value)} className={fieldClass}>
-            <option value="">선택해 주세요</option>
-            {["신용/체크카드", "휴대폰 결제", "PayPal", "Apple Pay", "Google Pay"].map((item) => (
-              <option key={item}>{item}</option>
+        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+        <h2 id="payment-sheet-title" className="text-lg font-semibold text-slate-900">안전결제</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-500">기본 배송지로 결제하고, 필요하면 주소록에서 다른 배송지를 고르세요.</p>
+
+        <fieldset className="mt-5">
+          <legend className="text-xs font-medium text-slate-500">배송지</legend>
+          {addresses.length === 0 ? (
+            <p className="mt-2 rounded-2xl bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-600">
+              등록된 배송지가 없어요.{" "}
+              <Link href="/mypage#addresses" className="font-medium text-slate-900 underline">
+                주소록에서 기본 배송지를 등록
+              </Link>
+              하면 여기에 자동으로 채워집니다.
+            </p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {addresses.map((item) => (
+                <label key={item.id} className={`flex cursor-pointer gap-3 rounded-2xl border px-3 py-3 text-sm ${addressId === item.id ? "border-slate-900" : "border-slate-200"}`}>
+                  <input
+                    type="radio"
+                    name="shipping-address"
+                    className="mt-1"
+                    checked={addressId === item.id}
+                    onChange={() => setAddressId(item.id)}
+                  />
+                  <span>
+                    <span className="block font-medium text-slate-900">
+                      {item.name}
+                      {item.isDefault ? <span className="ml-2 text-xs font-normal text-slate-400">기본 배송지</span> : null}
+                    </span>
+                    <span className="mt-1 block leading-5 text-slate-500">{formatDestination(item)}</span>
+                  </span>
+                </label>
+              ))}
+              <Link href="/mypage#addresses" className="inline-block text-xs font-medium text-slate-500 underline">
+                주소록에서 배송지 변경
+              </Link>
+            </div>
+          )}
+        </fieldset>
+
+        {showCustoms ? (
+          <label className="mt-4 block space-y-2 text-xs text-slate-500">
+            통관번호
+            <input value={customsNumber} onChange={(event) => setCustomsNumber(event.target.value)} placeholder="개인통관고유부호" className={fieldClass} />
+            <span className="block leading-5 text-slate-400">해외 카테고리이거나 배송지가 해외일 때 입력합니다.</span>
+          </label>
+        ) : null}
+
+        <fieldset className="mt-5">
+          <legend className="text-xs font-medium text-slate-500">안전결제 수단</legend>
+          <div className="mt-2 grid gap-2">
+            {PAYMENT_METHODS.map((item) => (
+              <label key={item} className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-sm ${method === item ? "border-slate-900 font-medium" : "border-slate-200"}`}>
+                <input type="radio" name="payment-method" checked={method === item} onChange={() => setMethod(item)} />
+                {item}
+              </label>
             ))}
-          </select>
-        </label>
-        <label className="mt-4 flex items-start gap-3 text-sm text-slate-700">
+          </div>
+        </fieldset>
+
+        <label className="mt-5 flex items-start gap-3 text-sm text-slate-700">
           <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.target.checked)} className="mt-1" />
-          필수 이용약관과 구매조건에 동의합니다.
+          <span>
+            <Link href="/legal/terms" className="underline">필수 이용약관</Link>
+            과 구매조건에 동의합니다.
+          </span>
         </label>
-        <p className="mt-3 text-sm font-semibold text-slate-900">결제 금액 {formatPrice(total)}</p>
-        <div className="mt-5 flex gap-2">
+
+        <p className="mt-4 text-sm font-semibold text-slate-900">결제 금액 {formatPrice(total)}</p>
+        <div className="mt-4 flex gap-2">
           <button type="button" className={ghostButtonClass} onClick={onClose}>닫기</button>
           <button type="submit" disabled={!ready} className={primaryButtonClass}>{formatPrice(total)} 결제하기</button>
         </div>

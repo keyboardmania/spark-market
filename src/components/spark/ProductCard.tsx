@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatPrice, type Product } from "@/data/mockData";
+import { formatPrice, wishCountOf, type Product } from "@/data/mockData";
 import { SaleStatusText } from "@/components/spark/Badges";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -11,6 +11,7 @@ export function ProductCard({ product, linked = true, meta }: { product: Product
   const { wishlistIds, toggleWishlist } = useSpark();
   const mounted = useMounted();
   const wished = mounted && wishlistIds.includes(product.id);
+  const wishCount = wishCountOf(product, wished);
   const sold = product.saleStatus === "판매완료";
   const media = (
     <div className="relative aspect-square overflow-hidden rounded-2xl bg-slate-50">
@@ -53,15 +54,20 @@ export function ProductCard({ product, linked = true, meta }: { product: Product
           {copy}
         </div>
       )}
-      <button
-        type="button"
-        aria-pressed={wished}
-        aria-label={wished ? "찜 해제" : "찜하기"}
-        onClick={() => toggleWishlist(product.id)}
-        className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm transition hover:bg-white"
-      >
-        <HeartIcon filled={wished} />
-      </button>
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-full bg-white/90 py-0.5 pl-2 pr-0.5 text-slate-700 shadow-sm">
+        <span className="min-w-4 text-xs font-semibold tabular-nums" aria-label={`찜 수 ${wishCount}`}>
+          {wishCount.toLocaleString("en-US")}
+        </span>
+        <button
+          type="button"
+          aria-pressed={wished}
+          aria-label={wished ? "찜 해제" : "찜하기"}
+          onClick={() => toggleWishlist(product.id)}
+          className="grid h-8 w-8 place-items-center rounded-full transition hover:bg-white"
+        >
+          <HeartIcon filled={wished} />
+        </button>
+      </div>
     </article>
   );
 }

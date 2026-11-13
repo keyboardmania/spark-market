@@ -235,6 +235,7 @@ function partiesOf(room: ChatRoom, product: Product | null) {
 }
 
 function speakerOf(room: ChatRoom, product: Product | null, sender: ChatMessage["sender"]) {
+  if (sender === "system") return { name: "Spark", email: "", role: "안내" as const };
   const party = partiesOf(room, product);
   const shopOwnsListing = product?.sellerId === "me";
   if (shopOwnsListing) {

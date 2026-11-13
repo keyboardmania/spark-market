@@ -9,7 +9,7 @@ import { ProductCard } from "@/components/spark/ProductCard";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
-import type { SparkUser } from "@/data/mockData";
+import { SANCTIONS, type SparkUser } from "@/data/mockData";
 
 export function MyPageView() {
   const router = useRouter();
@@ -62,11 +62,31 @@ export function MyPageView() {
         </dl>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <Shortcut href="/orders" label="구매/판매 내역" />
-        <Shortcut href="/chat" label="1:1 채팅" />
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Shortcut href="/orders" label="거래 내역" />
+        <Shortcut href="/selling" label="판매 관리" />
         <Shortcut href="/sell" label="상품 등록" />
+        <Shortcut href="/chat" label="1:1 채팅" />
       </div>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold text-slate-900">내 상점 제재내역</h2>
+        {SANCTIONS.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">제재 내역이 없어요.</p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {SANCTIONS.map((item) => (
+              <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-4 text-sm leading-6 text-slate-600">
+                <p>제한일시 {item.limitedAt}</p>
+                <p>해제일시 {item.releasedAt}</p>
+                <p>제한기간 {item.period}</p>
+                <p>제한사유 {item.reason}</p>
+                <p>위반유형 {item.violation}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <AddressBook />
       <AccountPanels />

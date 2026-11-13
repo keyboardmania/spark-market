@@ -51,7 +51,11 @@ type SharedState = {
   deletions: RetentionRecord[];
 };
 
-const STRIKE_LIMIT = 3;
+const SANCTION_AT = 4;
+
+function reachedSanction(count: number) {
+  return count >= SANCTION_AT;
+}
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 export function reportCategory(targetType: LiveReport["targetType"]): ReportCategory {
@@ -92,7 +96,7 @@ function overdueProductIds(reports: LiveReport[]) {
     counts.set(report.targetId, (counts.get(report.targetId) ?? 0) + 1);
   }
   return [...counts.entries()]
-    .filter(([id, count]) => count > STRIKE_LIMIT && getProductById(id)?.saleStatus !== "예약중")
+    .filter(([id, count]) => reachedSanction(count) && getProductById(id)?.saleStatus !== "예약중")
     .map(([id]) => id);
 }
 
@@ -185,7 +189,7 @@ export function acceptReport(id: string, options?: { reserved?: boolean }) {
   const count = reports.filter(
     (report) => report.status === "수락" && reportCategory(report.targetType) === category && report.targetId === current.targetId,
   ).length;
-  if (count <= STRIKE_LIMIT) {
+  if (!reachedSanction(count)) {
     emit({ ...base, reports });
     return `신고를 수락했어요. 같은 대상의 누적 수락은 ${count}회예요.`;
   }

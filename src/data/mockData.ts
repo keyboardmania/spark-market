@@ -24,6 +24,12 @@ export type GradeFilter = (typeof GRADE_FILTERS)[number];
 export const SALE_STATUSES = ["판매중", "예약중", "판매완료"] as const;
 export type SaleStatus = (typeof SALE_STATUSES)[number];
 
+export const SALE_STATUS_OPTIONS = [
+  { status: "판매중", code: "ON_SALE", label: "판매중 (ON_SALE)" },
+  { status: "예약중", code: "RESERVED", label: "예약중 (RESERVED)" },
+  { status: "판매완료", code: "SOLD", label: "판매완료 (SOLD)" },
+] as const satisfies ReadonlyArray<{ status: SaleStatus; code: string; label: string }>;
+
 export const IPS = ["하이큐!!", "블리치", "산리오", "포켓몬", "먼작귀"] as const;
 export type IpName = (typeof IPS)[number];
 export const IP_FILTERS = ["전체", ...IPS] as const;
@@ -53,6 +59,8 @@ export type ProductMedia = {
   name: string;
   kind: "image" | "video";
   url: string;
+  thumbnailed?: boolean;
+  displayOrder?: number;
 };
 
 export type Product = {
@@ -67,6 +75,7 @@ export type Product = {
   description: string;
   sellerId: string;
   likes: number;
+  viewCount?: number;
   motif: Motif;
   palette: Palette;
   shippingFee: number;
@@ -78,6 +87,19 @@ export type Product = {
   media?: ProductMedia[];
 };
 
+export function wishCountOf(product: Pick<Product, "likes">, wished = false) {
+  return product.likes + (wished ? 1 : 0);
+}
+
+export function viewCountOf(product: Pick<Product, "id" | "viewCount">) {
+  if (typeof product.viewCount === "number") return product.viewCount;
+  let hash = 0;
+  for (let index = 0; index < product.id.length; index += 1) {
+    hash = (hash * 33 + product.id.charCodeAt(index)) >>> 0;
+  }
+  return 80 + (hash % 4200);
+}
+
 export type SparkUser = {
   name: string;
   email: string;
@@ -88,11 +110,95 @@ export type SparkUser = {
 
 export const TEST_VERIFICATION_CODE = "5825";
 
-export function averageSoldPrice(category: Category, products: Product[]) {
-  const sold = products.filter((product) => product.category === category && product.saleStatus === "판매완료");
-  if (sold.length === 0) return null;
-  const total = sold.reduce((sum, product) => sum + product.price, 0);
-  return Math.round((total / sold.length) * 100) / 100;
+const AI_KEYWORDS = ["피규어", "프라모델", "TCG", "레고", "아트토이", "인형", "스퀴시"] as const;
+export type AiKeyword = (typeof AI_KEYWORDS)[number];
+
+const KEYWORD_RULES: { pattern: RegExp; keyword: AiKeyword }[] = [
+  { pattern: /포켓몬|pokemon|피카|리자몽|tcg|card|카드|psa|bgs/i, keyword: "TCG" },
+  { pattern: /레고|lego|brick/i, keyword: "레고" },
+  { pattern: /산리오|sanrio|키티|쿠로미|인형|doll|plush|누이/i, keyword: "인형" },
+  { pattern: /스퀴시|피젯|fidget|squish/i, keyword: "스퀴시" },
+  { pattern: /아트토이|arttoy|sofubi|소프비/i, keyword: "아트토이" },
+  { pattern: /프라모델|건담|gunpla/i, keyword: "프라모델" },
+  { pattern: /피규|넨도|nendo|figure|scale|하이큐|블리치/i, keyword: "피규어" },
+];
+
+const KEYWORD_BASE_PRICE: Record<AiKeyword, number> = {
+  피규어: 86,
+  프라모델: 54,
+  TCG: 128,
+  레고: 97,
+  아트토이: 73,
+  인형: 38,
+  스퀴시: 16,
+};
+
+export type PriceInquiryRow = {
+  id: string;
+  keyword: AiKeyword;
+  title: string;
+  price: number;
+  soldAt: string;
+};
+
+let priceInquiryRows: PriceInquiryRow[] | null = null;
+
+function soldPriceInquiries() {
+  if (priceInquiryRows) return priceInquiryRows;
+  const origin = Date.UTC(2026, 10, 1);
+  const rows: PriceInquiryRow[] = [];
+  for (const keyword of AI_KEYWORDS) {
+    const base = KEYWORD_BASE_PRICE[keyword];
+    for (let index = 0; index < 100; index += 1) {
+      rows.push({
+        id: `${keyword}-${index + 1}`,
+        keyword,
+        title: `${keyword} 판매완료 ${index + 1}`,
+        price: base + ((index * 7) % 23) - 8,
+        soldAt: new Date(origin - index * 86_400_000).toISOString(),
+      });
+    }
+  }
+  priceInquiryRows = rows;
+  return rows;
+}
+
+export function orderMedia(media: ProductMedia[]) {
+  const ranked = media.map((item, index) => ({ item, index }));
+  ranked.sort((a, b) => (a.item.displayOrder ?? a.index) - (b.item.displayOrder ?? b.index) || a.index - b.index);
+  let covered = false;
+  return ranked.map(({ item }, index) => {
+    const thumbnailed = item.kind === "image" && !covered;
+    if (thumbnailed) covered = true;
+    return { ...item, displayOrder: index, thumbnailed };
+  });
+}
+
+export function representativeImage(media: ProductMedia[]) {
+  return orderMedia(media).find((item) => item.thumbnailed) ?? null;
+}
+
+export function detectKeywordFromImage(fileName: string, fileUrl = "") {
+  const source = `${fileName} ${fileUrl}`;
+  for (const rule of KEYWORD_RULES) {
+    if (rule.pattern.test(source)) return rule.keyword;
+  }
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  return AI_KEYWORDS[hash % AI_KEYWORDS.length];
+}
+
+export function quoteForKeyword(keyword: AiKeyword) {
+  const rows = soldPriceInquiries()
+    .filter((row) => row.keyword === keyword)
+    .sort((a, b) => (a.soldAt < b.soldAt ? 1 : a.soldAt > b.soldAt ? -1 : 0))
+    .slice(0, 100);
+  const average = rows.reduce((sum, row) => sum + row.price, 0) / rows.length;
+  return {
+    keyword,
+    average: Math.round(average * 100) / 100,
+    sampleSize: rows.length,
+  };
 }
 
 const NICKNAME_PREFIXES = ["컬렉터", "Spark", "수집가", "선반"] as const;
@@ -105,7 +211,7 @@ export function createNickname() {
 
 export type ChatMessage = {
   id: string;
-  sender: "me" | "seller";
+  sender: "me" | "seller" | "system";
   text?: string;
   originalText?: string;
   translatedText?: string;
@@ -113,7 +219,7 @@ export type ChatMessage = {
   videoUrl?: string;
   at: string;
   sentAt?: string;
-  kind?: "purchase";
+  kind?: "purchase" | "payment";
 };
 
 export type PurchaseStatus = "대기" | "거절" | "승인" | "결제완료";
@@ -1273,7 +1379,8 @@ export const CHAT_ROOMS: ChatRoom[] = [
     buyerEmail: "sora@spark.market",
     sellerEmail: "me@spark.market",
     activity: "활성",
-    updatedAt: "2026-10-27T19:46:00+09:00",
+    updatedAt: "2026-10-27T19:50:00+09:00",
+    purchase: { status: "대기", requestedAt: "2026-10-27T19:50:00+09:00" },
     messages: [
       {
         id: "m-rukia-en",
@@ -1282,6 +1389,13 @@ export const CHAT_ROOMS: ChatRoom[] = [
         translatedText: "안녕하세요 친구, 이 카드 상태가 진짜 좋습니까?",
         text: "안녕하세요 친구, 이 카드 상태가 진짜 좋습니까?",
         at: "오후 7:46",
+      },
+      {
+        id: "m-rukia-buy",
+        sender: "seller",
+        kind: "purchase",
+        text: "블리치 루키아 아크릴 스탠드 구매를 신청합니다. 수락해 주세요.",
+        at: "오후 7:50",
       },
     ],
   },
@@ -1295,7 +1409,8 @@ export const CHAT_ROOMS: ChatRoom[] = [
     buyerEmail: "seoyeon@spark.market",
     sellerEmail: "slab.drawer@spark.market",
     activity: "활성",
-    updatedAt: "2026-10-27T18:20:00+09:00",
+    updatedAt: "2026-10-27T18:31:00+09:00",
+    purchase: { status: "승인", requestedAt: "2026-10-27T18:28:00+09:00" },
     messages: [
       {
         id: "m4",
@@ -1314,6 +1429,20 @@ export const CHAT_ROOMS: ChatRoom[] = [
         sender: "seller",
         text: "방금 캡처해서 다음에 첨부해 둘게요. 직거래는 성수에서 가능해요.",
         at: "오후 6:20",
+      },
+      {
+        id: "m6b",
+        sender: "me",
+        kind: "purchase",
+        text: "포켓몬 베이스 세트 리자몽 구매를 신청합니다. 수락해 주세요.",
+        at: "오후 6:28",
+      },
+      {
+        id: "m6c",
+        sender: "system",
+        kind: "payment",
+        text: "판매자가 구매를 수락했습니다. 결제를 진행해 주세요.",
+        at: "오후 6:31",
       },
     ],
   },
@@ -1707,6 +1836,20 @@ export type AddressDraft = {
   isDefault: boolean;
 };
 
+const KOREAN_ADDRESS = /서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|충청|전북|전남|전라|경북|경남|경상|제주|대한민국|한국/;
+
+export function needsCustomsNumber(product: { category?: string; country?: string }, addressLine: string) {
+  const categoryText = `${product.category ?? ""} ${product.country ?? ""}`;
+  const categoryOverseas = categoryText.includes("해외") || ORIGINS.some((origin) => product.country === origin);
+  const line = addressLine.trim();
+  const addressOverseas =
+    line.length > 0 &&
+    (line.includes("해외") ||
+      ORIGINS.some((origin) => line.includes(origin)) ||
+      (!KOREAN_ADDRESS.test(line) && /[A-Za-z]{4,}/.test(line)));
+  return categoryOverseas || addressOverseas;
+}
+
 export type AdminCategory = {
   id: string;
   name: string;
@@ -1974,7 +2117,7 @@ export type Faq = {
 };
 
 export const FAQS: Faq[] = [
-  { id: "faq-3", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 1:1 채팅에서 구매 신청을 보냅니다. 판매자가 승인하면 결제 정보를 입력합니다.", createdAt: "2026.10.27", deletedAt: null },
+  { id: "faq-3", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 구매하기를 누르면 채팅이 열리고 판매자에게 수락 요청이 전송됩니다. 판매자가 수락하면 채팅의 결제하기로 안전결제를 진행합니다.", createdAt: "2026.10.27", deletedAt: null },
   { id: "faq-2", question: "정산 수수료는 얼마인가요?", answer: "상품 금액 기준 비구독 10%, VIP 6%입니다. 배송비에는 수수료를 매기지 않습니다.", createdAt: "2026.10.18", deletedAt: null },
   { id: "faq-1", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null },
 ];
@@ -2258,7 +2401,7 @@ export type Sanction = {
 };
 
 export const SANCTIONS: Sanction[] = [
-  { id: "sn-1", limitedAt: "2026.10.24 21:03", releasedAt: "2026.10.27 21:03", period: "3일", reason: "신고 3회 누적", violation: "거래 방해" },
+  { id: "sn-1", limitedAt: "2026.10.24 21:03", releasedAt: "2026.10.27 21:03", period: "3일", reason: "신고 4회 누적", violation: "거래 방해" },
 ];
 
 export type BankAccount = {

@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { CheckoutView } from "@/components/spark/CheckoutView";
-import { PRODUCTS, getProductById } from "@/data/mockData";
-
-export const metadata: Metadata = { title: "결제" };
+import { redirect } from "next/navigation";
+import { PRODUCTS } from "@/data/mockData";
 
 export function generateStaticParams() {
   return PRODUCTS.map((product) => ({ id: product.id }));
@@ -10,5 +7,5 @@ export function generateStaticParams() {
 
 export default async function CheckoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CheckoutView id={id} initialProduct={getProductById(id)} />;
+  redirect(`/products/${id}`);
 }

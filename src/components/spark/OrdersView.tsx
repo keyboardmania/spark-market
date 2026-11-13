@@ -9,11 +9,11 @@ import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles"
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-const SALE_STATUS_FILTERS = [
+const SALE_TRADE_FILTERS = [
   { id: "ALL", label: "전체" },
-  { id: "SELLING", label: "판매 중" },
-  { id: "RESERVED", label: "예약 중" },
-  { id: "DONE", label: "거래 완료" },
+  { id: "OPEN", label: "진행 중" },
+  { id: "DONE", label: "구매확정" },
+  { id: "CANCELLED", label: "거래취소" },
 ] as const;
 
 const BUY_STATUS_FILTERS = [
@@ -23,9 +23,8 @@ const BUY_STATUS_FILTERS = [
 ] as const;
 
 type OrderTab = "buy" | "sale";
-type SaleStatusFilter = (typeof SALE_STATUS_FILTERS)[number]["id"];
+type SaleTradeFilter = (typeof SALE_TRADE_FILTERS)[number]["id"];
 type BuyStatusFilter = (typeof BUY_STATUS_FILTERS)[number]["id"];
-type SalePhase = Exclude<SaleStatusFilter, "ALL"> | "CANCELLED";
 type BuyPhase = Exclude<BuyStatusFilter, "ALL"> | "CANCELLED";
 
 const TRADE_TONE = {
@@ -36,11 +35,10 @@ const TRADE_TONE = {
   거래취소: "bg-zinc-100 text-zinc-400",
 } as const;
 
-export function salePhase(status: OrderStatus): SalePhase {
+function saleTradePhase(status: OrderStatus): Exclude<SaleTradeFilter, "ALL"> {
   if (status === "구매확정") return "DONE";
   if (status === "거래취소") return "CANCELLED";
-  if (status === "배송중" || status === "배송완료") return "RESERVED";
-  return "SELLING";
+  return "OPEN";
 }
 
 export function buyPhase(status: OrderStatus): BuyPhase {
@@ -52,17 +50,16 @@ export function buyPhase(status: OrderStatus): BuyPhase {
 export function orderTradePresentation(role: Order["role"], status: OrderStatus) {
   if (status === "거래취소") return { label: "거래취소" as const, tone: TRADE_TONE.거래취소 };
   if (role === "sale") {
-    const phase = salePhase(status);
-    const label = phase === "RESERVED" ? "예약 중" : phase === "DONE" ? "거래 완료" : "판매 중";
-    return { label, tone: TRADE_TONE[label] };
+    const tone = status === "구매확정" ? TRADE_TONE["거래 완료"] : TRADE_TONE["결제/진행 중"];
+    return { label: status, tone };
   }
   const phase = buyPhase(status);
   const label = phase === "DONE" ? "거래 완료" : "결제/진행 중";
   return { label, tone: TRADE_TONE[label] };
 }
 
-function parseSaleFilter(value: string | null): SaleStatusFilter {
-  if (value === "SELLING" || value === "RESERVED" || value === "DONE") return value;
+function parseSaleFilter(value: string | null): SaleTradeFilter {
+  if (value === "OPEN" || value === "DONE" || value === "CANCELLED") return value;
   return "ALL";
 }
 
@@ -71,10 +68,9 @@ function parseBuyFilter(value: string | null): BuyStatusFilter {
   return "ALL";
 }
 
-function resolveTab(tabParam: string | null, statusParam: string | null): OrderTab {
+function resolveTab(tabParam: string | null): OrderTab {
   if (tabParam === "sale") return "sale";
   if (tabParam === "buy" || tabParam === "purchase") return "buy";
-  if (statusParam === "SELLING" || statusParam === "RESERVED") return "sale";
   return "buy";
 }
 
@@ -93,7 +89,7 @@ export function OrdersView() {
   const { orders, updateOrder, notify } = useSpark();
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const statusParam = searchParams.get("status");
-  const tab = resolveTab(searchParams.get("tab"), statusParam);
+  const tab = resolveTab(searchParams.get("tab"));
   const saleFilter = tab === "sale" ? parseSaleFilter(statusParam) : "ALL";
   const buyFilter = tab === "buy" ? parseBuyFilter(statusParam) : "ALL";
   const activeFilter = tab === "sale" ? saleFilter : buyFilter;
@@ -109,7 +105,7 @@ export function OrdersView() {
     replaceQuery(params);
   }
 
-  function selectFilter(next: SaleStatusFilter | BuyStatusFilter) {
+  function selectFilter(next: SaleTradeFilter | BuyStatusFilter) {
     const params = new URLSearchParams();
     params.set("tab", tab);
     if (next !== "ALL") params.set("status", next);
@@ -123,7 +119,7 @@ export function OrdersView() {
   const visible = orders.filter((order) => {
     if (tab === "sale") {
       if (order.role !== "sale") return false;
-      return saleFilter === "ALL" || salePhase(order.status) === saleFilter;
+      return saleFilter === "ALL" || saleTradePhase(order.status) === saleFilter;
     }
     if (order.role !== "purchase") return false;
     return buyFilter === "ALL" || buyPhase(order.status) === buyFilter;
@@ -152,7 +148,7 @@ export function OrdersView() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="거래 상태">
-        {(tab === "sale" ? SALE_STATUS_FILTERS : BUY_STATUS_FILTERS).map((filter) => (
+        {(tab === "sale" ? SALE_TRADE_FILTERS : BUY_STATUS_FILTERS).map((filter) => (
           <button
             key={filter.id}
             type="button"

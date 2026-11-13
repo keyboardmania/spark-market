@@ -18,7 +18,7 @@ export default function ProhibitedPage() {
       <p className="text-[11px] tracking-[0.22em] text-slate-400">POLICY</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">판매 금지 품목</h1>
       <p className="mt-3 text-sm leading-6 text-slate-500">
-        아래 품목은 등록할 수 없습니다. 금지 품목이거나 같은 상품 신고가 3회 수락되면 상품은 삭제됩니다. 데이터는 남고 사진과 동영상은 3개월 후 삭제되며, 예약중 상품은 삭제하지 않습니다.
+        아래 품목은 등록할 수 없습니다. 금지 품목이거나 같은 상품 신고 수락이 3회를 초과하면 상품은 삭제됩니다. 데이터는 남고 사진과 동영상은 3개월 후 삭제되며, 예약중 상품은 삭제하지 않습니다.
       </p>
       <ul className="mt-6 space-y-2 text-sm text-slate-700">
         {ITEMS.map((item) => (

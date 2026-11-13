@@ -7,6 +7,7 @@ import {
   PRODUCTS,
   SALE_STATUSES,
   formatPrice,
+  viewCountOf,
   type CategoryFilter,
   type Origin,
   type Product,
@@ -199,7 +200,11 @@ export function MarketView({ category }: { category: CategoryFilter }) {
 function compareProducts(a: Product, b: Product, sort: SortId) {
   if (sort === "priceAsc") return a.price - b.price;
   if (sort === "priceDesc") return b.price - a.price;
-  if (sort === "likes") return b.likes - a.likes;
+  if (sort === "likes") {
+    const byWish = b.likes - a.likes;
+    if (byWish !== 0) return byWish;
+    return viewCountOf(b) - viewCountOf(a);
+  }
   return b.postedOrder - a.postedOrder;
 }
 

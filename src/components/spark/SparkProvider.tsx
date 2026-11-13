@@ -151,8 +151,7 @@ type SparkContextValue = {
   ensureRoom: (product: Product) => string | null;
   startPurchase: (product: Product) => string | null;
   sendMessage: (roomId: string, message: Pick<ChatMessage, "text" | "imageUrl"> & { sender?: ChatMessage["sender"] }) => void;
-  requestPurchase: (roomId: string) => void;
-  decidePurchase: (roomId: string, accept: boolean, sellerAddress: string, sellerAccount: string) => void;
+  decidePurchase: (roomId: string, accept: boolean) => void;
   completePurchase: (roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => string | null;
   markRead: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
@@ -346,7 +345,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
 
   const addProduct = useCallback((product: Product) => {
     setRecords((current) => [
-      { ...product, saleStatus: "판매중", deletedAt: null, hardDeleteAt: null },
+      { ...product, saleStatus: product.saleStatus, deletedAt: null, hardDeleteAt: null },
       ...current.filter((item) => item.id !== product.id),
     ]);
   }, []);
@@ -361,7 +360,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       setRecords((items) =>
         items.map((item) =>
           item.id === id
-            ? { ...item, ...patch, id: item.id, sellerId: item.sellerId, saleStatus: item.saleStatus, deletedAt: null, hardDeleteAt: null }
+            ? { ...item, ...patch, id: item.id, sellerId: item.sellerId, saleStatus: patch.saleStatus ?? item.saleStatus, deletedAt: null, hardDeleteAt: null }
             : item,
         ),
       );
@@ -549,7 +548,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       sender: "me",
       kind: "purchase",
       at: formatTime(),
-      text: `${product.title} · ${formatPrice(product.price)}`,
+      text: `${product.title} · ${formatPrice(product.price)} 구매를 신청합니다. 수락해 주세요.`,
     };
     let already = false;
     setRooms((current) => {
@@ -583,7 +582,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
         ],
       }, ...current];
     });
-    notify(already ? "이미 진행 중인 구매 신청이 있어요." : "판매자에게 구매 신청 카드를 보냈어요.");
+    notify(already ? "이미 진행 중인 구매 신청이 있어요." : "채팅을 열고 판매자에게 수락 요청을 보냈어요.");
     return roomId;
   }, [notify, rooms, user]);
 
@@ -600,6 +599,9 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       return;
     }
     const sender = message.sender ?? "me";
+    const room = rooms.find((item) => item.id === roomId);
+    const listing = room ? records.find((item) => item.id === room.productId) : undefined;
+    const viewerIsSeller = listing?.sellerId === "me";
     const warned = Boolean(message.text && /계좌|카톡|카카오|010-?\d|개인정보|외부결제/.test(message.text));
     const mine: ChatMessage = {
       id: crypto.randomUUID(),
@@ -609,14 +611,14 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       imageUrl: message.imageUrl,
     };
     const warning: ChatMessage | null = warned
-      ? { id: crypto.randomUUID(), sender: "seller", at: formatTime(), text: "외부결제나 개인정보 전송은 경고 1회가 누적됩니다. Spark 안전결제를 이용해 주세요." }
+      ? { id: crypto.randomUUID(), sender: "system", at: formatTime(), text: "외부결제나 개인정보 전송은 경고 1회가 누적됩니다. Spark 안전결제를 이용해 주세요." }
       : null;
     setRooms((current) =>
       current.map((room) =>
         room.id === roomId ? { ...room, updatedAt: new Date().toISOString(), messages: [...room.messages, ...(warning ? [warning] : []), mine] } : room,
       ),
     );
-    if (sender !== "me") return;
+    if (viewerIsSeller || sender !== "me") return;
     const counterpart = rooms.find((item) => item.id === roomId)?.sellerName ?? "상대";
     setTypingRoomId(roomId);
 
@@ -644,44 +646,28 @@ export function SparkProvider({ children }: { children: ReactNode }) {
         href: `/chat/${roomId}`,
       });
     }, 900);
-  }, [chatPausedUntil, notify, pushNotice, rooms]);
+  }, [chatPausedUntil, notify, pushNotice, records, rooms]);
 
-  const requestPurchase = useCallback((roomId: string) => {
-    const room = rooms.find((item) => item.id === roomId);
-    const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
-    if (!room || !product || product.saleStatus !== "판매중") {
-      notify("판매중인 상품만 구매 신청할 수 있어요.");
-      return;
-    }
-    if (room.purchase?.status === "대기" || room.purchase?.status === "승인") {
-      notify("이미 진행 중인 구매 신청이 있어요.");
-      return;
-    }
-    const note: ChatMessage = {
-      id: crypto.randomUUID(),
-      sender: "me",
-      kind: "purchase",
-      at: formatTime(),
-      text: `${product.title} · ${formatPrice(product.price)}`,
-    };
-    setRooms((current) =>
-      current.map((item) =>
-        item.id === roomId
-          ? { ...item, messages: [...item.messages, note], purchase: { status: "대기", requestedAt: new Date().toISOString() } }
-          : item,
-      ),
-    );
-    notify("구매 신청을 보냈어요. 판매자 역할로 전환하면 승인 창이 열립니다.");
-  }, [notify, records, rooms]);
-
-  const decidePurchase = useCallback((roomId: string, accept: boolean, sellerAddress: string, sellerAccount: string) => {
+  const decidePurchase = useCallback((roomId: string, accept: boolean) => {
     const room = rooms.find((item) => item.id === roomId);
     const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
     if (!room || !product || room.purchase?.status !== "대기") return;
     const vip = Boolean(user?.membership === "vip" && product.sellerId === "me");
     const money = settlementOf(product.price, vip);
-    const text = accept ? "구매 신청을 승인했습니다. 결제 정보를 입력해 주세요." : "구매 신청을 거절했습니다.";
-    const note: ChatMessage = { id: crypto.randomUUID(), sender: "seller", at: formatTime(), text };
+    const note: ChatMessage = accept
+      ? {
+          id: crypto.randomUUID(),
+          sender: "system",
+          kind: "payment",
+          at: formatTime(),
+          text: "판매자가 구매를 수락했습니다. 결제를 진행해 주세요.",
+        }
+      : {
+          id: crypto.randomUUID(),
+          sender: "system",
+          at: formatTime(),
+          text: "판매자가 구매 신청을 거절했습니다. 상품은 판매중으로 유지됩니다.",
+        };
     setRooms((current) =>
       current.map((item) =>
         item.id === roomId
@@ -689,19 +675,23 @@ export function SparkProvider({ children }: { children: ReactNode }) {
               ...item,
               messages: [...item.messages, note],
               purchase: accept
-                ? { status: "승인", requestedAt: item.purchase?.requestedAt ?? new Date().toISOString(), sellerAddress, sellerAccount, feeRate: money.feeRate, payout: money.payoutAmount }
+                ? { status: "승인", requestedAt: item.purchase?.requestedAt ?? new Date().toISOString(), feeRate: money.feeRate, payout: money.payoutAmount }
                 : { status: "거절", requestedAt: item.purchase?.requestedAt ?? new Date().toISOString() },
             }
           : item,
       ),
     );
-    notify(accept ? "구매를 승인했어요. 구매자 역할에서 결제를 진행해 주세요." : "구매 신청을 거절했어요. 상품은 판매중으로 유지됩니다.");
+    notify(accept ? "구매를 수락했어요. 구매자 채팅에 결제하기 안내를 보냈습니다." : "구매 신청을 거절했어요. 상품은 판매중으로 유지됩니다.");
   }, [notify, records, rooms, user?.membership]);
 
   const completePurchase = useCallback((roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => {
     const room = rooms.find((item) => item.id === roomId);
     const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
     if (!room || !product || room.purchase?.status !== "승인") return null;
+    if (product.sellerId === "me") {
+      notify("판매자는 이 채팅에서 결제할 수 없어요.");
+      return null;
+    }
     const vip = product.sellerId === "me" && user?.membership === "vip";
     const money = settlementOf(product.price, Boolean(vip));
     const orderId = `SPK-${Date.now().toString().slice(-8)}`;
@@ -898,7 +888,6 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     ensureRoom,
     startPurchase,
     sendMessage,
-    requestPurchase,
     decidePurchase,
     completePurchase,
     markRead,

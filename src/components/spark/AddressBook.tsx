@@ -132,7 +132,7 @@ export function AddressBook() {
   }
 
   return (
-    <section className="mt-8">
+    <section id="addresses" className="mt-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">배송지 관리</h2>

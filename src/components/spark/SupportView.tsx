@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   INQUIRY_TYPES,
-  SANCTIONS,
   USER_INQUIRIES,
   type InquiryType,
   type NoticeCategory,
@@ -129,21 +128,6 @@ export function SupportView() {
               <p className="text-xs text-slate-400">{item.category} · {item.createdAt}</p>
               <p className="mt-1 text-sm font-medium text-slate-900">{item.title}</p>
               <p className="mt-2 text-sm leading-6 text-slate-500">{item.body}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-semibold text-slate-900">내상점 제재내역</h2>
-        <ul className="mt-4 space-y-3">
-          {SANCTIONS.map((item) => (
-            <li key={item.id} className="rounded-2xl border border-slate-200 px-4 py-4 text-sm leading-6 text-slate-600">
-              <p>제한일시 {item.limitedAt}</p>
-              <p>해제일시 {item.releasedAt}</p>
-              <p>제한기간 {item.period}</p>
-              <p>제한사유 {item.reason}</p>
-              <p>위반유형 {item.violation}</p>
             </li>
           ))}
         </ul>
