@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import {
   ADMIN_REPORTS,
+  BOARD_POSTS,
   FAQS,
   NOTICES,
   REVIEWS,
@@ -10,6 +11,7 @@ import {
   formatRetentionDate,
   getProductById,
   hardDeleteAtFrom,
+  type BoardPost,
   type Faq,
   type Notice,
   type ReportCategory,
@@ -17,6 +19,7 @@ import {
   type Review,
   type TermVersion,
 } from "@/data/mockData";
+import { SEED_BOARDS, type BoardDraft, type BoardRecord } from "@/features/admin-boards/model";
 
 export type LiveReport = {
   id: string;
@@ -44,6 +47,8 @@ type SharedState = {
   reviews: Review[];
   faqs: Faq[];
   notices: Notice[];
+  boards: BoardRecord[];
+  posts: BoardPost[];
   terms: TermVersion[];
   suspendedUntil: Record<string, string>;
   deletedProductIds: string[];
@@ -107,6 +112,8 @@ let state: SharedState = {
   reviews: REVIEWS,
   faqs: FAQS,
   notices: NOTICES,
+  boards: SEED_BOARDS,
+  posts: BOARD_POSTS,
   terms: TERMS_VERSIONS,
   suspendedUntil: {},
   deletedProductIds: INITIAL_PRODUCT_DELETIONS,
@@ -260,6 +267,29 @@ export function softDeleteFaq(id: string) {
     ...state,
     faqs: state.faqs.map((faq) => (faq.id === id ? { ...faq, deletedAt: new Date().toISOString() } : faq)),
   });
+}
+
+export function addBoard(draft: BoardDraft) {
+  const name = draft.name.trim();
+  const category = draft.category.trim();
+  if (!name || !category) return "invalid" as const;
+  if (state.boards.some((board) => board.name === name)) return "duplicate" as const;
+  emit({ ...state, boards: [{ id: crypto.randomUUID(), ...draft, name, category }, ...state.boards] });
+  return "ok" as const;
+}
+
+export function updateBoard(id: string, draft: BoardDraft) {
+  const name = draft.name.trim();
+  const category = draft.category.trim();
+  if (!name || !category) return;
+  emit({
+    ...state,
+    boards: state.boards.map((board) => (board.id === id ? { ...board, ...draft, name, category } : board)),
+  });
+}
+
+export function removeBoard(id: string) {
+  emit({ ...state, boards: state.boards.filter((board) => board.id !== id) });
 }
 
 export function addNotice(notice: Notice) {

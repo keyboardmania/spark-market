@@ -10,6 +10,8 @@ import {
   SELLER_REPLIES,
   SEED_NOTIFICATIONS,
   TEST_VERIFICATION_CODE,
+  notificationAllowed,
+  seedNotificationSettings,
   formatPrice,
   formatTime,
   getSeller,
@@ -21,7 +23,7 @@ import {
   type BankAccount,
   type ChatMessage,
   type ChatRoom,
-  type NotifyMode,
+  type NotificationSetting,
   type Order,
   type Product,
   type ShippingAddress,
@@ -148,6 +150,8 @@ type SparkContextValue = {
   requestCancel: (id: string, reason: string, detail: string) => void;
   rooms: ChatRoom[];
   typingRoomId: string | null;
+  activeChatRoomId: string | null;
+  setActiveChatRoomId: (roomId: string | null) => void;
   ensureRoom: (product: Product) => string | null;
   startPurchase: (product: Product) => string | null;
   sendMessage: (roomId: string, message: Pick<ChatMessage, "text" | "imageUrl"> & { sender?: ChatMessage["sender"] }) => void;
@@ -164,8 +168,10 @@ type SparkContextValue = {
   notifications: AppNotification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
-  notifyMode: NotifyMode;
-  setNotifyMode: (mode: NotifyMode) => void;
+  removeNotification: (id: string) => void;
+  clearNotifications: () => void;
+  notificationSettings: NotificationSetting[];
+  setNotificationEnabled: (alarmId: string, enabled: boolean) => void;
   updateProfile: (patch: { name?: string; photoUrl?: string }) => void;
   requestResetCode: (email: string) => boolean;
   resetPassword: (email: string, code: string, nextPassword: string) => boolean;
@@ -176,6 +182,20 @@ type SparkContextValue = {
 
 const SparkContext = createContext<SparkContextValue | null>(null);
 const CANCEL_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+function chatRoomIdFromHref(href: string) {
+  const match = /^\/chat\/([^/?#]+)/.exec(href);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function isChatNoticeForRoom(notice: Pick<AppNotification, "kind" | "href">, roomId: string) {
+  return notice.kind === "채팅" && chatRoomIdFromHref(notice.href) === roomId;
+}
 
 function expireCancelRequests(orders: Order[], now = Date.now()) {
   let changed = false;
@@ -201,7 +221,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<LocaleId>("ko");
   const [banks, setBanks] = useState<BankAccount[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>(SEED_NOTIFICATIONS);
-  const [notifyMode, setNotifyMode] = useState<NotifyMode>("소리");
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(() => seedNotificationSettings());
   const [retention, setRetention] = useState<RetentionNote | null>(null);
   const shared = useShared();
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
@@ -216,6 +236,8 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>(ORDERS);
   const [rooms, setRooms] = useState<ChatRoom[]>(CHAT_ROOMS);
   const [typingRoomId, setTypingRoomId] = useState<string | null>(null);
+  const [activeChatRoomId, setActiveChatRoomIdState] = useState<string | null>(null);
+  const activeChatRoomIdRef = useRef<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
   const replyCursor = useRef(0);
@@ -226,12 +248,38 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200);
   }, []);
 
+  const setActiveChatRoomId = useCallback((roomId: string | null) => {
+    activeChatRoomIdRef.current = roomId;
+    setActiveChatRoomIdState(roomId);
+    if (!roomId) return;
+    setNotifications((items) => {
+      if (!items.some((item) => !item.isRead && isChatNoticeForRoom(item, roomId))) return items;
+      return items.map((item) => (!item.isRead && isChatNoticeForRoom(item, roomId) ? { ...item, isRead: true } : item));
+    });
+  }, []);
+
   const pushNotice = useCallback((notice: Omit<AppNotification, "id" | "createdAt" | "isRead">) => {
-    if (notifyMode === "무음") return;
-    setNotifications((items) =>
-      [{ ...notice, id: crypto.randomUUID(), createdAt: formatTime(), isRead: false }, ...items].slice(0, 50),
-    );
-  }, [notifyMode]);
+    if (!notificationAllowed(notificationSettings, notice.kind)) return;
+    const roomId = notice.kind === "채팅" ? chatRoomIdFromHref(notice.href) : null;
+    if (roomId && roomId === activeChatRoomIdRef.current) return;
+    setNotifications((items) => {
+      if (roomId) {
+        const index = items.findIndex((item) => !item.isRead && isChatNoticeForRoom(item, roomId));
+        if (index >= 0) {
+          const current = items[index];
+          const updated: AppNotification = {
+            ...current,
+            text: notice.text,
+            href: notice.href,
+            createdAt: formatTime(),
+            isRead: false,
+          };
+          return [updated, ...items.filter((_, itemIndex) => itemIndex !== index)].slice(0, 50);
+        }
+      }
+      return [{ ...notice, id: crypto.randomUUID(), createdAt: formatTime(), isRead: false }, ...items].slice(0, 50);
+    });
+  }, [notificationSettings]);
 
   const markNotificationRead = useCallback((id: string) => {
     setNotifications((items) => items.map((item) => (item.id === id ? { ...item, isRead: true } : item)));
@@ -240,6 +288,23 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   const markAllNotificationsRead = useCallback(() => {
     setNotifications((items) => (items.every((item) => item.isRead) ? items : items.map((item) => ({ ...item, isRead: true }))));
   }, []);
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((items) => items.filter((item) => item.id !== id));
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications((items) => (items.length === 0 ? items : []));
+  }, []);
+
+  const setNotificationEnabled = useCallback((alarmId: string, enabled: boolean) => {
+    setNotificationSettings((items) => items.map((item) => (item.alarmId === alarmId ? { ...item, enabled } : item)));
+  }, []);
+
+  useEffect(() => {
+    const userUuid = user?.email ?? "guest";
+    setNotificationSettings((items) => (items.every((item) => item.userUuid === userUuid) ? items : items.map((item) => ({ ...item, userUuid }))));
+  }, [user?.email]);
 
   const products = useMemo(
     () =>
@@ -885,6 +950,8 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     requestCancel,
     rooms,
     typingRoomId,
+    activeChatRoomId,
+    setActiveChatRoomId,
     ensureRoom,
     startPurchase,
     sendMessage,
@@ -901,8 +968,10 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     notifications,
     markNotificationRead,
     markAllNotificationsRead,
-    notifyMode,
-    setNotifyMode,
+    removeNotification,
+    clearNotifications,
+    notificationSettings,
+    setNotificationEnabled,
     updateProfile,
     requestResetCode,
     resetPassword,

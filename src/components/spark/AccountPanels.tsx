@@ -1,28 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { AlertsPanel } from "@/components/spark/AlertsPanel";
 import { passwordIssue } from "@/components/spark/AuthScreens";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { BANK_LIMIT } from "@/data/mockData";
 import { useShared } from "@/data/shared";
 
+export function LoginHint() {
+  return (
+    <p className="text-sm leading-6 text-slate-500">
+      로그인하면 이 설정을 바꿀 수 있어요.{" "}
+      <Link href="/login" className="font-medium text-slate-900">로그인</Link>
+    </p>
+  );
+}
+
 export function AccountPanels() {
-  const {
-    user,
-    banks,
-    addBank,
-    removeBank,
-    notifications,
-    notifyMode,
-    setNotifyMode,
-    updateProfile,
-    requestResetCode,
-    changePassword,
-    withdraw,
-    retention,
-  } = useSpark();
-  const reviews = useShared().reviews.filter((review) => !review.deletedAt && review.author === user?.name);
+  const { user, retention } = useSpark();
 
   return (
     <div className="mt-10 space-y-8">
@@ -36,53 +33,21 @@ export function AccountPanels() {
       {user ? (
         <>
           <ProfileForm />
-          <section id="alerts">
-            <h2 className="text-lg font-semibold text-slate-900">알림</h2>
-            <label className="mt-3 block max-w-xs space-y-2">
-              <span className="text-xs text-slate-500">알림 방식</span>
-              <select value={notifyMode} onChange={(event) => setNotifyMode(event.target.value as typeof notifyMode)} className={fieldClass}>
-                <option value="소리">소리</option>
-                <option value="진동">진동</option>
-                <option value="무음">무음</option>
-              </select>
-            </label>
-            <p className="mt-2 text-xs text-slate-400">알림은 최신 50개만 남고 그보다 오래된 항목은 삭제됩니다. 무음이면 새 알림을 쌓지 않습니다.</p>
-            <ul className="mt-3 space-y-2">
-              {notifications.length === 0 ? <li className="text-sm text-slate-400">알림이 없어요.</li> : null}
-              {notifications.map((item) => (
-                <li key={item.id} className={`rounded-2xl border px-4 py-3 text-sm ${item.isRead ? "border-slate-200" : "border-rose-200 bg-rose-50/40"}`}>
-                  <span className="text-xs text-slate-400">{item.kind} · {item.createdAt}{item.isRead ? "" : " · 안 읽음"}</span>
-                  <p className="text-slate-800">{item.text}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <BankForm banks={banks} addBank={addBank} removeBank={removeBank} />
-          <PasswordForm email={user.email} requestResetCode={requestResetCode} changePassword={changePassword} />
-          <section>
-            <h2 className="text-lg font-semibold text-slate-900">내 리뷰</h2>
-            {reviews.length === 0 ? <p className="mt-3 text-sm text-slate-400">작성한 리뷰가 없어요.</p> : (
-              <ul className="mt-3 space-y-2">
-                {reviews.map((review) => (
-                  <li key={review.id} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-                    <p className="text-slate-800">{"★".repeat(review.rating)} {review.text}</p>
-                    <p className="mt-1 text-xs text-slate-400">사진·동영상 보관 만료 {review.mediaExpiresAt}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <WithdrawForm provider={user.provider} withdraw={withdraw} />
+          <AlertsPanel />
+          <BankPanel />
+          <PasswordPanel />
+          <ReviewsPanel />
+          <WithdrawPanel />
         </>
       ) : null}
     </div>
   );
 }
 
-function ProfileForm() {
+export function ProfileForm() {
   const { user, updateProfile } = useSpark();
   const [name, setName] = useState(user?.name ?? "");
-  if (!user) return null;
+  if (!user) return <LoginHint />;
   return (
     <section>
       <h2 className="text-lg font-semibold text-slate-900">프로필</h2>
@@ -120,6 +85,12 @@ function ProfileForm() {
   );
 }
 
+export function BankPanel() {
+  const { user, banks, addBank, removeBank } = useSpark();
+  if (!user) return <LoginHint />;
+  return <BankForm banks={banks} addBank={addBank} removeBank={removeBank} />;
+}
+
 function BankForm({
   banks,
   addBank,
@@ -135,7 +106,7 @@ function BankForm({
   const [isDefault, setIsDefault] = useState(banks.length === 0);
   const [error, setError] = useState<string | null>(null);
   return (
-    <section>
+    <section id="accounts">
       <h2 className="text-lg font-semibold text-slate-900">내 계좌</h2>
       <p className="mt-1 text-xs text-slate-400">최대 {BANK_LIMIT}개까지 저장합니다.</p>
       <ul className="mt-3 space-y-2">
@@ -174,6 +145,12 @@ function BankForm({
       </form>
     </section>
   );
+}
+
+export function PasswordPanel() {
+  const { user, requestResetCode, changePassword } = useSpark();
+  if (!user) return <LoginHint />;
+  return <PasswordForm email={user.email} requestResetCode={requestResetCode} changePassword={changePassword} />;
 }
 
 function PasswordForm({
@@ -216,6 +193,35 @@ function PasswordForm({
         <button type="submit" className={primaryButtonClass}>변경</button>
         {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       </form>
+    </section>
+  );
+}
+
+export function WithdrawPanel() {
+  const { user, withdraw } = useSpark();
+  if (!user) return <LoginHint />;
+  return <WithdrawForm provider={user.provider} withdraw={withdraw} />;
+}
+
+export { AlertsPanel };
+
+export function ReviewsPanel() {
+  const { user } = useSpark();
+  const reviews = useShared().reviews.filter((review) => !review.deletedAt && review.author === user?.name);
+  if (!user) return <LoginHint />;
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-slate-900">내 리뷰</h2>
+      {reviews.length === 0 ? <p className="mt-3 text-sm text-slate-400">작성한 리뷰가 없어요.</p> : (
+        <ul className="mt-3 space-y-2">
+          {reviews.map((review) => (
+            <li key={review.id} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm">
+              <p className="text-slate-800">{"★".repeat(review.rating)} {review.text}</p>
+              <p className="mt-1 text-xs text-slate-400">사진·동영상 보관 만료 {review.mediaExpiresAt}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

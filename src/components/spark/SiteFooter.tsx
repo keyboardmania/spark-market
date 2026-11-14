@@ -71,6 +71,13 @@ export function SiteFooter() {
         </div>
         <div>
           <p className="text-xs font-medium tracking-wide text-slate-400">{t("help")}</p>
+          <ul className="mt-3 space-y-2 text-sm text-slate-600">
+            <li><Link href="/support" className="hover:text-slate-900">고객센터</Link></li>
+            <li><Link href="/support/boards/board-faq" className="hover:text-slate-900">FAQ</Link></li>
+            <li><Link href="/support/boards/board-notice" className="hover:text-slate-900">공지사항</Link></li>
+            <li><Link href="/support/boards/board-inquiry" className="hover:text-slate-900">문의하기</Link></li>
+            <li><Link href="/support/boards/board-event" className="hover:text-slate-900">이벤트</Link></li>
+          </ul>
           <p className="mt-3 text-sm font-medium text-slate-800">1588-0427</p>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             평일 10:00–18:00

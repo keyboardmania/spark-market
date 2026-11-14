@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useMounted } from "@/components/spark/useMounted";
 import { ADMIN_ACCOUNTS, ADMIN_DEMO } from "@/data/mockData";
 import { useAdmin, type AdminLoginFailure } from "@/components/spark/AdminProvider";
 import { fieldClass, primaryButtonClass } from "@/components/spark/styles";
@@ -10,14 +11,15 @@ export function AdminLogin() {
   const router = useRouter();
   const pathname = usePathname();
   const { login, ready, session } = useAdmin();
+  const mounted = useMounted();
   const [email, setEmail] = useState<string>(ADMIN_DEMO.email);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<AdminLoginFailure | null>(null);
 
   useEffect(() => {
-    if (!ready || !session || pathname !== "/admin/login") return;
+    if (!mounted || !ready || !session || pathname !== "/admin/login") return;
     router.replace("/admin");
-  }, [ready, session, pathname, router]);
+  }, [mounted, ready, session, pathname, router]);
 
   function submit() {
     const result = login(email, password);
@@ -27,10 +29,6 @@ export function AdminLogin() {
     }
     setError(null);
     router.replace("/admin");
-  }
-
-  if (!ready) {
-    return <p className="grid min-h-dvh place-items-center bg-slate-50 text-sm text-slate-400">세션을 확인하고 있어요.</p>;
   }
 
   return (

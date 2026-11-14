@@ -15,7 +15,7 @@ const PAYMENT_METHODS = ["신용/체크카드", "휴대폰", "페이팔", "애�
 
 export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const mounted = useMounted();
-  const { rooms, products, addresses, isProductDeleted, typingRoomId, sendMessage, markRead, leaveRoom, notify, decidePurchase, completePurchase } = useSpark();
+  const { rooms, products, addresses, isProductDeleted, typingRoomId, sendMessage, markRead, leaveRoom, notify, decidePurchase, completePurchase, setActiveChatRoomId } = useSpark();
   const [activeId, setActiveId] = useState(initialRoomId ?? "room-hinata");
   const [payOpen, setPayOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -40,8 +40,29 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   }, []);
 
   useEffect(() => {
+    if (!initialRoomId) return;
+    setActiveId(initialRoomId);
+    setShowList(false);
+  }, [initialRoomId]);
+
+  useEffect(() => {
     if (active?.id) markRead(active.id);
   }, [active?.id, markRead]);
+
+  useEffect(() => {
+    const roomId = active?.id ?? null;
+    const media = window.matchMedia("(min-width: 768px)");
+    const publish = () => {
+      const threadVisible = Boolean(roomId) && (media.matches || !showList);
+      setActiveChatRoomId(threadVisible ? roomId : null);
+    };
+    publish();
+    media.addEventListener("change", publish);
+    return () => {
+      media.removeEventListener("change", publish);
+      setActiveChatRoomId(null);
+    };
+  }, [active?.id, setActiveChatRoomId, showList]);
 
   useEffect(() => {
     setPayOpen(false);
@@ -186,8 +207,8 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                     mine={message.sender === "me"}
                     footer={messageFooter(message, {
                       isSeller,
+                      roomId: active.id,
                       status: active.purchase?.status,
-                      onAccept: () => decidePurchase(active.id, true),
                       onReject: () => decidePurchase(active.id, false),
                       onPay: () => setPayOpen(true),
                     })}
@@ -250,21 +271,21 @@ function messageFooter(
   message: ChatMessage,
   actions: {
     isSeller: boolean;
+    roomId: string;
     status?: string;
-    onAccept: () => void;
     onReject: () => void;
     onPay: () => void;
   },
 ) {
   if (message.kind === "purchase" && actions.status === "대기" && actions.isSeller) {
     return (
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700" onClick={actions.onReject}>
           거절
         </button>
-        <button type="button" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white" onClick={actions.onAccept}>
+        <Link href={`/sell/payout/${actions.roomId}`} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white">
           수락
-        </button>
+        </Link>
       </div>
     );
   }

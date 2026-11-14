@@ -83,9 +83,32 @@ export type Product = {
   location: string;
   postedOrder: number;
   postedLabel: string;
+  createdAt?: string;
   imageUrl?: string;
   media?: ProductMedia[];
 };
+
+export function createdAtRank(product: Pick<Product, "postedOrder" | "createdAt">) {
+  if (product.createdAt) {
+    const parsed = Date.parse(product.createdAt.includes("T") ? product.createdAt : product.createdAt.replace(/\./g, "-"));
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return product.postedOrder;
+}
+
+const NO_WISHES: ReadonlySet<string> = new Set();
+
+export function compareByPopularity(a: Product, b: Product, wishedIds: ReadonlySet<string> = NO_WISHES) {
+  const byWish = wishCountOf(b, wishedIds.has(b.id)) - wishCountOf(a, wishedIds.has(a.id));
+  if (byWish !== 0) return byWish;
+  const byView = viewCountOf(b) - viewCountOf(a);
+  if (byView !== 0) return byView;
+  return createdAtRank(b) - createdAtRank(a);
+}
+
+export function compareByCreatedAt(a: Product, b: Product) {
+  return createdAtRank(b) - createdAtRank(a);
+}
 
 export function wishCountOf(product: Pick<Product, "likes">, wished = false) {
   return product.likes + (wished ? 1 : 0);
@@ -2122,6 +2145,37 @@ export const FAQS: Faq[] = [
   { id: "faq-1", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null },
 ];
 
+export type BoardPost = {
+  id: string;
+  boardId: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  fixed: boolean;
+  deletedAt: string | null;
+};
+
+export const BOARD_POSTS: BoardPost[] = [
+  {
+    id: "evt-1",
+    boardId: "board-event",
+    title: "11월 컬렉터 위크",
+    body: "11월 한 달간 피규어와 TCG 매물을 홈 인기상품·신상품에서 함께 보여 줍니다. 안전결제만 수수료 안내 대상입니다.",
+    createdAt: "2026.11.01",
+    fixed: true,
+    deletedAt: null,
+  },
+  {
+    id: "evt-2",
+    boardId: "board-event",
+    title: "신규 가입 웰컴",
+    body: "이메일 또는 소셜로 가입하면 마이페이지에서 프로필과 거래 메뉴를 바로 열 수 있습니다.",
+    createdAt: "2026.10.20",
+    fixed: false,
+    deletedAt: null,
+  },
+];
+
 export type TermVersion = {
   id: string;
   title: string;
@@ -2452,7 +2506,34 @@ export const SEED_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
-export type NotifyMode = "소리" | "진동" | "무음";
+export type NotificationSetting = {
+  id: string;
+  userUuid: string;
+  alarmId: string;
+  enabled: boolean;
+};
+
+export const NOTIFICATION_CHANNELS = [
+  { alarmId: "alarm-chat", label: "채팅 메시지 알림", kinds: ["채팅"] },
+  { alarmId: "alarm-nego", label: "가격 제안(네고) 및 입찰 알림", kinds: ["네고"] },
+  { alarmId: "alarm-trade", label: "결제 및 거래 진행 상태 알림", kinds: ["거래"] },
+] as const satisfies readonly { alarmId: string; label: string; kinds: readonly NotificationKind[] }[];
+
+export function seedNotificationSettings(userUuid = "guest"): NotificationSetting[] {
+  return NOTIFICATION_CHANNELS.map((channel) => ({
+    id: `setting-${channel.alarmId}`,
+    userUuid,
+    alarmId: channel.alarmId,
+    enabled: true,
+  }));
+}
+
+export function notificationAllowed(settings: readonly NotificationSetting[], kind: NotificationKind) {
+  const channel = NOTIFICATION_CHANNELS.find((item) => (item.kinds as readonly NotificationKind[]).includes(kind));
+  if (!channel) return true;
+  const setting = settings.find((item) => item.alarmId === channel.alarmId);
+  return setting?.enabled !== false;
+}
 
 export type StoredReport = {
   id: string;

@@ -273,6 +273,7 @@ export function SellForm({ productId }: { productId?: string }) {
       shippingIncluded: draft.shippingIncluded,
       shippingFee: 0,
       viewCount: editing ? product?.viewCount : 0,
+      createdAt: product?.createdAt ?? new Date().toISOString().slice(0, 10).replace(/-/g, "."),
       imageUrl: thumb?.url,
       media: ordered,
     };

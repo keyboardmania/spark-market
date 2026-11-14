@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
+import { useMounted } from "@/components/spark/useMounted";
 import { useShared } from "@/data/shared";
 
 const NAV = [
@@ -14,35 +15,31 @@ const NAV = [
   { href: "/admin/trades", label: "거래·정산 관리" },
   { href: "/admin/support", label: "고객센터 신고 관리" },
   { href: "/admin/reviews", label: "리뷰 관리" },
+  { href: "/admin/alarms", label: "알림 관리" },
+  { href: "/admin/boards", label: "게시판 관리" },
   { href: "/admin/operators", label: "운영자 계정 관리" },
   { href: "/admin/desk", label: "문의·공지·FAQ·약관 관리" },
 ] as const;
 
 export function AdminConsole({ children }: { children: ReactNode }) {
   const { ready, session } = useAdmin();
+  const mounted = useMounted();
   const pathname = usePathname();
   const router = useRouter();
+  const authed = mounted && ready && session ? session : null;
 
   useEffect(() => {
-    if (!ready || session || pathname === "/admin/login") return;
+    if (!mounted || !ready || session || pathname === "/admin/login") return;
     router.replace("/admin/login");
-  }, [ready, session, pathname, router]);
+  }, [mounted, ready, session, pathname, router]);
 
-  if (!ready) {
-    return <p className="grid min-h-dvh place-items-center bg-slate-50 text-sm text-slate-400">세션을 확인하고 있어요.</p>;
-  }
-
-  if (!session) {
-    return <p className="grid min-h-dvh place-items-center bg-slate-50 text-sm text-slate-400">관리자 로그인으로 이동하고 있어요.</p>;
-  }
-
-  return <AdminFrame>{children}</AdminFrame>;
+  return <AdminFrame session={authed}>{children}</AdminFrame>;
 }
 
-function AdminFrame({ children }: { children: ReactNode }) {
+function AdminFrame({ children, session }: { children: ReactNode; session: { name: string; role: string } | null }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { session, logout, inquiries } = useAdmin();
+  const { logout, inquiries } = useAdmin();
   const shared = useShared();
   const openReports = shared.reports.filter((item) => item.status === "접수" || item.status === "검토").length;
   const openInquiries = inquiries.filter((item) => item.status === "미답변").length;
@@ -87,9 +84,15 @@ function AdminFrame({ children }: { children: ReactNode }) {
       <div className="min-w-0">
         <header className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/80 px-4 py-3 sm:px-6">
           <p className="text-sm text-slate-500">
-            <span className="font-medium text-slate-900">{session?.name}</span>
-            <span className="mx-2 text-slate-300">·</span>
-            {session?.role}
+            {session ? (
+              <>
+                <span className="font-medium text-slate-900">{session.name}</span>
+                <span className="mx-2 text-slate-300">·</span>
+                {session.role}
+              </>
+            ) : (
+              "세션을 확인하고 있어요."
+            )}
           </p>
           <div className="flex items-center gap-2">
             <Link href="/" className="rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">

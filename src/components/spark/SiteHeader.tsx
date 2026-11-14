@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CATEGORY_ROUTES, categoryHref, formatPrice, type AppNotification } from "@/data/mockData";
+import { CATEGORY_ROUTES, categoryHref, formatPrice, type AppNotification, type SparkUser } from "@/data/mockData";
 import { LOCALES, translate } from "@/i18n";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
@@ -12,11 +12,12 @@ import { useMounted } from "@/components/spark/useMounted";
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, rooms, products, logout, locale, setLocale, notifications, markNotificationRead, markAllNotificationsRead } = useSpark();
+  const { user, rooms, products, logout, locale, setLocale, notifications, markNotificationRead, markAllNotificationsRead, removeNotification, clearNotifications } = useSpark();
   const mounted = useMounted();
   const sessionUser = mounted ? user : null;
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const [query, setQuery] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const unread = rooms.reduce((sum, room) => sum + room.unread, 0);
@@ -24,8 +25,22 @@ export function SiteHeader() {
   useEffect(() => {
     setMenuOpen(false);
     setNoticeOpen(false);
-    setQuery("");
+    setSuggesting(false);
+    const keyword = pathname === "/search" ? new URLSearchParams(window.location.search).get("q") ?? "" : "";
+    setQuery(keyword);
   }, [pathname]);
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    setSuggesting(true);
+  }
+
+  function submitSearch(value: string) {
+    const keyword = value.trim();
+    if (!keyword) return;
+    setSuggesting(false);
+    router.push(`/search?q=${encodeURIComponent(keyword)}`);
+  }
 
   function signOut() {
     logout();
@@ -52,18 +67,12 @@ export function SiteHeader() {
           </Link>
 
           <div className="relative hidden w-40 shrink-0 md:block lg:w-52">
-            <SearchField id="spark-search-desktop" label={t("search")} placeholder={t("searchPlaceholder")} empty={t("empty")} query={query} onChange={setQuery} results={results} onSelect={(id) => router.push(`/products/${id}`)} />
+            <SearchField id="spark-search-desktop" label={t("search")} placeholder={t("searchPlaceholder")} empty={t("empty")} query={query} suggestionsOpen={suggesting} onChange={changeQuery} onSubmit={submitSearch} results={results} onSelect={(id) => router.push(`/products/${id}`)} />
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-0.5">
-            <Link href="/sell" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-medium leading-none text-slate-700 hover:bg-slate-50 lg:inline-flex">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <Link href="/sell" className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500 px-3.5 py-2 text-[13px] font-semibold leading-none text-white shadow-sm hover:bg-rose-600">
               {t("sell")}
-            </Link>
-            <Link href="/support" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-medium leading-none text-slate-700 hover:bg-slate-50 lg:inline-flex">
-              {t("support")}
-            </Link>
-            <Link href="/membership" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-medium leading-none text-slate-700 hover:bg-slate-50 lg:inline-flex">
-              {t("membership")}
             </Link>
             <NotificationBell
               label={t("notifications")}
@@ -72,18 +81,18 @@ export function SiteHeader() {
               notifications={notifications}
               onRead={markNotificationRead}
               onReadAll={markAllNotificationsRead}
+              onRemove={removeNotification}
+              onClear={clearNotifications}
             />
             <IconLink href="/chat" label={t("chat")} badge={unread} />
             {sessionUser ? (
-              <button type="button" onClick={signOut} className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-500 hover:bg-slate-50 lg:inline-flex">
-                {t("logout")}
-              </button>
+              <ProfileMenu key={pathname} user={sessionUser} onSignOut={signOut} labels={{ mypage: t("mypage"), orders: t("orders"), logout: t("logout") }} />
             ) : (
               <>
-                <Link href="/login" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-600 hover:bg-slate-50 lg:inline-flex">
+                <Link href="/login" className="inline-flex whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-600 hover:bg-slate-50">
                   {t("login")}
                 </Link>
-                <Link href="/signup" className="hidden whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-1.5 text-[13px] font-medium leading-none text-white hover:bg-slate-700 lg:inline-flex">
+                <Link href="/signup" className="inline-flex whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-1.5 text-[13px] font-medium leading-none text-white hover:bg-slate-700">
                   {t("signup")}
                 </Link>
               </>
@@ -96,9 +105,6 @@ export function SiteHeader() {
                 ))}
               </select>
             </label>
-            <Link href="/mypage" className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-700 hover:bg-slate-50 lg:inline-flex">
-              {t("mypage")}
-            </Link>
             <button
               type="button"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-700 hover:bg-slate-50 lg:hidden"
@@ -112,7 +118,7 @@ export function SiteHeader() {
         </div>
 
         <div className="pb-2 md:hidden">
-          <SearchField id="spark-search-mobile" label={t("search")} placeholder={t("searchPlaceholder")} empty={t("empty")} query={query} onChange={setQuery} results={results} onSelect={(id) => router.push(`/products/${id}`)} />
+          <SearchField id="spark-search-mobile" label={t("search")} placeholder={t("searchPlaceholder")} empty={t("empty")} query={query} suggestionsOpen={suggesting} onChange={changeQuery} onSubmit={submitSearch} results={results} onSelect={(id) => router.push(`/products/${id}`)} />
         </div>
 
         <nav className="flex items-center gap-1 overflow-x-auto pb-2.5" aria-label="카테고리">
@@ -145,8 +151,6 @@ export function SiteHeader() {
               </select>
             </label>
             <MenuLink href="/sell">{t("sell")}</MenuLink>
-            <MenuLink href="/support">{t("support")}</MenuLink>
-            <MenuLink href="/membership">{t("membership")}</MenuLink>
             <MenuLink href="/orders">{t("orders")}</MenuLink>
             <MenuLink href="/chat">{t("chat")}</MenuLink>
             <MenuLink href="/mypage">{t("mypage")}</MenuLink>
@@ -173,7 +177,9 @@ function SearchField({
   placeholder,
   empty,
   query,
+  suggestionsOpen,
   onChange,
+  onSubmit,
   results,
   onSelect,
 }: {
@@ -182,23 +188,42 @@ function SearchField({
   placeholder: string;
   empty: string;
   query: string;
+  suggestionsOpen: boolean;
   onChange: (value: string) => void;
+  onSubmit: (value: string) => void;
   results: { id: string; title: string; category: string; price: number }[];
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="relative">
+    <form
+      role="search"
+      className="relative"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const field = event.currentTarget.querySelector("input");
+        onSubmit(field?.value ?? query);
+        field?.blur();
+      }}
+    >
       <label className="sr-only" htmlFor={id}>
         {label}
       </label>
       <input
         id={id}
+        type="search"
         value={query}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-full bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:bg-white focus:ring-slate-400"
+        className="w-full rounded-full bg-slate-50 py-2.5 pl-4 pr-11 text-sm text-slate-900 outline-none ring-1 ring-slate-200 placeholder:text-slate-400 focus:bg-white focus:ring-slate-400 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
       />
-      {query.trim() ? (
+      <button
+        type="submit"
+        aria-label={label}
+        className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-slate-500 hover:bg-white hover:text-slate-900"
+      >
+        <SearchIcon />
+      </button>
+      {suggestionsOpen && query.trim() ? (
         <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           {results.length === 0 ? (
             <p className="px-4 py-4 text-sm text-slate-400">{empty}</p>
@@ -223,7 +248,97 @@ function SearchField({
           )}
         </div>
       ) : null}
+    </form>
+  );
+}
+
+function ProfileMenu({
+  user,
+  onSignOut,
+  labels,
+}: {
+  user: SparkUser;
+  onSignOut: () => void;
+  labels: { mypage: string; orders: string; logout: string };
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 12 });
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const menu = open ? (
+    <div
+      ref={menuRef}
+      role="menu"
+      className="fixed z-50 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl"
+      style={{ top: pos.top, right: pos.right }}
+    >
+      <p className="truncate px-4 py-2 text-xs text-slate-400">{user.email}</p>
+      <ProfileLink href="/mypage" onPick={() => setOpen(false)}>{labels.mypage}</ProfileLink>
+      <ProfileLink href="/orders" onPick={() => setOpen(false)}>{labels.orders}</ProfileLink>
+      <ProfileLink href="/selling" onPick={() => setOpen(false)}>판매 관리</ProfileLink>
+      <ProfileLink href="/mypage/wishlist" onPick={() => setOpen(false)}>찜한 상품</ProfileLink>
+      <ProfileLink href="/chat" onPick={() => setOpen(false)}>채팅</ProfileLink>
+      <ProfileLink href="/support" onPick={() => setOpen(false)}>고객센터</ProfileLink>
+      <button type="button" role="menuitem" onClick={onSignOut} className="block w-full px-4 py-2.5 text-left text-sm text-slate-500 hover:bg-slate-50">
+        {labels.logout}
+      </button>
     </div>
+  ) : null;
+
+  return (
+    <div ref={rootRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((current) => !current)}
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-slate-50"
+      >
+        {user.photoUrl ? (
+          <img src={user.photoUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+        ) : (
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-xs font-medium text-white">{user.name.slice(0, 1)}</span>
+        )}
+        <span className="hidden max-w-24 truncate text-[13px] font-medium text-slate-800 sm:inline">{user.name}</span>
+      </button>
+      {menu ? createPortal(menu, document.body) : null}
+    </div>
+  );
+}
+
+function ProfileLink({ href, onPick, children }: { href: string; onPick: () => void; children: string }) {
+  return (
+    <Link href={href} role="menuitem" onClick={onPick} className="block px-4 py-2.5 text-sm text-slate-800 hover:bg-slate-50">
+      {children}
+    </Link>
   );
 }
 
@@ -247,6 +362,8 @@ function NotificationBell({
   notifications,
   onRead,
   onReadAll,
+  onRemove,
+  onClear,
 }: {
   label: string;
   open: boolean;
@@ -254,6 +371,8 @@ function NotificationBell({
   notifications: AppNotification[];
   onRead: (id: string) => void;
   onReadAll: () => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
 }) {
   const router = useRouter();
   const mounted = useMounted();
@@ -316,17 +435,22 @@ function NotificationBell({
     >
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <p className="text-sm font-semibold text-slate-900">{label}</p>
-        <button type="button" onClick={onReadAll} disabled={unread === 0} className="text-xs font-medium text-rose-500 disabled:text-slate-300">
-          모두 읽음
-        </button>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={onReadAll} disabled={unread === 0} className="text-xs font-medium text-rose-500 disabled:text-slate-300">
+            모두 읽음
+          </button>
+          <button type="button" onClick={onClear} disabled={notifications.length === 0} className="text-xs font-medium text-slate-500 disabled:text-slate-300">
+            전체 삭제
+          </button>
+        </div>
       </div>
       <ul className="max-h-96 overflow-y-auto">
         {notifications.length === 0 ? (
           <li className="px-4 py-10 text-center text-sm text-slate-400">알림이 없어요.</li>
         ) : (
           notifications.map((item) => (
-            <li key={item.id}>
-              <button type="button" onClick={() => openItem(item)} className={`flex w-full gap-3 px-4 py-3 text-left hover:bg-slate-50 ${item.isRead ? "" : "bg-rose-50/60"}`}>
+            <li key={item.id} className={`flex items-start ${item.isRead ? "" : "bg-rose-50/60"}`}>
+              <button type="button" onClick={() => openItem(item)} className="flex min-w-0 flex-1 gap-3 px-4 py-3 text-left hover:bg-slate-50">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-transparent" : "bg-rose-500"}`} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-3">
@@ -335,6 +459,14 @@ function NotificationBell({
                   </span>
                   <span className={`mt-1 block text-sm leading-5 ${item.isRead ? "text-slate-500" : "font-medium text-slate-900"}`}>{item.text}</span>
                 </span>
+              </button>
+              <button
+                type="button"
+                aria-label="알림 삭제"
+                onClick={() => onRemove(item.id)}
+                className="mr-2 mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-400 hover:bg-white hover:text-slate-700"
+              >
+                <DismissIcon />
               </button>
             </li>
           ))
@@ -371,6 +503,23 @@ function MenuLink({ href, children }: { href: string; children: string }) {
     <Link href={href} className="rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50">
       {children}
     </Link>
+  );
+}
+
+function DismissIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
+      <path d="M7 7l10 10M17 7 7 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
+      <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M16 16.5 20 20.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   );
 }
 
