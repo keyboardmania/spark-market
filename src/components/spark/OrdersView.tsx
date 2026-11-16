@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { formatPrice, type Order, type OrderStatus } from "@/data/mockData";
-import { GRID_PAGE_SIZE, GridPager } from "@/components/spark/GridPager";
+import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { SalesManageView } from "@/components/spark/SalesManageView";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
@@ -15,14 +15,14 @@ import { useMounted } from "@/components/spark/useMounted";
 
 const BUY_STATUS_FILTERS = [
   { id: "ALL", label: "전체" },
-  { id: "PAYING", label: "결제/진행 중" },
-  { id: "DONE", label: "거래 완료" },
-  { id: "CANCELLED", label: "거래취소" },
+  { id: "OPEN", label: "거래 진행 중" },
+  { id: "DONE", label: "거래 완료/정산" },
+  { id: "CANCELLED", label: "거래 취소" },
 ] as const;
 
 type OrderTab = "buy" | "sale";
 type BuyStatusFilter = (typeof BUY_STATUS_FILTERS)[number]["id"];
-type BuyPhase = Exclude<BuyStatusFilter, "ALL"> | "CANCELLED";
+type BuyPhase = "OPEN" | "DONE" | "CANCELLED";
 
 const TRADE_TONE = {
   "판매 중": "bg-slate-100 text-slate-600",
@@ -35,7 +35,7 @@ const TRADE_TONE = {
 export function buyPhase(status: OrderStatus): BuyPhase {
   if (status === "구매확정") return "DONE";
   if (status === "거래취소") return "CANCELLED";
-  return "PAYING";
+  return "OPEN";
 }
 
 export function orderTradePresentation(role: Order["role"], status: OrderStatus) {
@@ -50,7 +50,9 @@ export function orderTradePresentation(role: Order["role"], status: OrderStatus)
 }
 
 function parseBuyFilter(value: string | null): BuyStatusFilter {
-  if (value === "PAYING" || value === "DONE" || value === "CANCELLED") return value;
+  if (value === "OPEN" || value === "PAYING" || value === "SHIPPING") return "OPEN";
+  if (value === "DONE" || value === "SETTLED") return "DONE";
+  if (value === "CANCELLED") return "CANCELLED";
   return "ALL";
 }
 
@@ -75,7 +77,7 @@ export function OrdersView() {
   const { orders, updateOrder, notify } = useSpark();
   const { t } = useI18n();
   const [trackingId, setTrackingId] = useState<string | null>(null);
-  const statusParam = searchParams.get("status");
+  const statusParam = searchParams.get("filter") ?? searchParams.get("status");
   const tab = resolveTab(searchParams.get("tab"));
   const buyFilter = tab === "buy" ? parseBuyFilter(statusParam) : "ALL";
 
@@ -93,27 +95,17 @@ export function OrdersView() {
   function selectFilter(next: BuyStatusFilter) {
     const params = new URLSearchParams();
     params.set("tab", tab);
-    if (next !== "ALL") params.set("status", next);
+    if (next !== "ALL") params.set("filter", next);
     replaceQuery(params);
   }
 
-  function selectPage(next: number) {
-    const params = new URLSearchParams();
-    params.set("tab", "buy");
-    if (buyFilter !== "ALL") params.set("status", buyFilter);
-    if (next > 1) params.set("page", String(next));
-    replaceQuery(params);
-  }
+  const purchases = orders.filter((order) => order.role === "purchase" && (buyFilter === "ALL" || buyPhase(order.status) === buyFilter));
+  const { visibleCount, hasMore, sentinelRef } = useInfiniteGrid(purchases.length, `${tab}:${buyFilter}`);
+  const visible = purchases.slice(0, visibleCount);
 
   if (!mounted && tab === "buy") {
     return <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6"><div className="h-80 animate-pulse rounded-2xl bg-slate-100" /></div>;
   }
-
-  const purchases = orders.filter((order) => order.role === "purchase" && (buyFilter === "ALL" || buyPhase(order.status) === buyFilter));
-  const requestedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const pageCount = Math.max(1, Math.ceil(purchases.length / GRID_PAGE_SIZE));
-  const page = Math.min(Math.max(Number.isFinite(requestedPage) ? requestedPage : 1, 1), pageCount);
-  const visible = purchases.slice((page - 1) * GRID_PAGE_SIZE, page * GRID_PAGE_SIZE);
 
   function confirmPurchase(order: Order) {
     updateOrder(order.id, { status: "구매확정" });
@@ -128,8 +120,8 @@ export function OrdersView() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">구매/판매 내역</h1>
           <p className="mt-2 text-sm text-slate-500">
             {tab === "sale"
-              ? "판매 상품과 주문을 한 목록에서 봅니다. 수락·거절, 배송, 정산까지 여기서 처리해요."
-              : "구매한 상품의 결제, 배송, 구매확정을 여기서 확인해요."}
+              ? "진행 중인 주문은 상세로, 판매중·예약중·판매완료 글은 수정 화면으로 이동해요."
+              : "카드를 누르면 주문 상세로 이동해요. 구매확정과 배송 조회만 목록에서 바로 할 수 있어요."}
           </p>
         </div>
         {tab === "sale" ? <Link href="/sell" className={ghostButtonClass}>상품 등록</Link> : null}
@@ -173,37 +165,37 @@ export function OrdersView() {
             {visible.map((order) => {
               const trade = orderTradePresentation(order.role, order.status);
               const canConfirm = order.status === "배송완료";
-              const canLinkCancel = order.status !== "구매확정" && order.status !== "거래취소";
-              const canTrack = Boolean(order.tracking) && order.status !== "거래취소";
+              const canTrack = order.status === "배송중" && Boolean(order.tracking);
               return (
                 <li key={order.id}>
-                  <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <Link href={`/orders/${order.id}`}>
-                      <ProductVisual motif={order.motif} palette={order.palette} uid={order.id} imageUrl={order.imageUrl} alt="" className="aspect-square w-full" />
-                    </Link>
+                  <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-slate-400">
+                    <Link
+                      href={`/orders/${order.id}`}
+                      aria-label={order.title}
+                      className="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-slate-900"
+                    />
+                    <ProductVisual motif={order.motif} palette={order.palette} uid={order.id} imageUrl={order.imageUrl} alt="" className="aspect-square w-full" />
                     <div className="flex flex-1 flex-col gap-2 p-3">
                       <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${trade.tone}`}>{statusLabel(t, trade.label)}</span>
-                      <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900">
-                        <Link href={`/orders/${order.id}`} className="hover:underline">{order.title}</Link>
-                      </h2>
+                      <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 group-hover:underline">{order.title}</h2>
                       <p className="text-sm font-semibold tabular-nums text-slate-900">{formatPrice(order.price)}</p>
                       <p className="text-xs leading-5 text-slate-500">{t("partySeller")} {order.counterpart}</p>
                       {order.status === "배송완료" ? <p className="text-xs leading-5 text-slate-400">배송완료 후 5일이 지나면 자동 구매확정됩니다.</p> : null}
-                      <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-                        {canConfirm ? <button type="button" onClick={() => confirmPurchase(order)} className={miniPrimary}>구매 확정</button> : null}
-                        {canLinkCancel ? <Link href={`/orders/${order.id}?cancel=1`} className={miniGhost}>거래 취소</Link> : null}
-                        {canTrack ? (
-                          <button type="button" onClick={() => setTrackingId(trackingId === order.id ? null : order.id)} className={miniGhost}>배송 조회</button>
-                        ) : null}
-                        <Link href={`/orders/${order.id}`} className={miniGhost}>주문 상세</Link>
-                      </div>
+                      {canConfirm || canTrack ? (
+                        <div className="relative z-20 mt-auto pt-1">
+                          {canConfirm ? <button type="button" onClick={() => confirmPurchase(order)} className={`${miniPrimary} w-full`}>구매 확정</button> : null}
+                          {canTrack ? (
+                            <button type="button" onClick={() => setTrackingId(order.id)} className={`${miniGhost} w-full`}>배송 조회</button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                 </li>
               );
             })}
           </ul>
-          <GridPager page={page} pageCount={pageCount} total={purchases.length} onPage={selectPage} label="구매 내역 페이지" />
+          <InfiniteSentinel active={hasMore} sentinelRef={sentinelRef} />
         </>
       )}
       {trackingId ? <BuyTrackDialog order={orders.find((order) => order.id === trackingId) ?? null} onClose={() => setTrackingId(null)} /> : null}

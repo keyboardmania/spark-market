@@ -15,7 +15,7 @@ import {
   type Product,
   type SaleStatus,
 } from "@/data/mockData";
-import { GRID_PAGE_SIZE, GridPager } from "@/components/spark/GridPager";
+import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { SaleStatusMenu } from "@/components/spark/SaleStatusMenu";
@@ -25,13 +25,9 @@ import { saleStatusLabel } from "@/features/trade/productGuards";
 
 const FILTERS = [
   { id: "ALL", label: "전체" },
-  { id: "ON_SALE", label: "판매중" },
-  { id: "RESERVED", label: "예약중" },
-  { id: "SOLD", label: "판매완료" },
-  { id: "REQUEST", label: "수락 대기" },
-  { id: "SHIPPING", label: "배송/진행" },
-  { id: "SETTLED", label: "정산" },
-  { id: "CANCELLED", label: "거래취소" },
+  { id: "OPEN", label: "거래 진행 중" },
+  { id: "DONE", label: "거래 완료/정산" },
+  { id: "CANCELLED", label: "거래 취소" },
 ] as const;
 
 type SaleFilter = (typeof FILTERS)[number]["id"];
@@ -40,12 +36,6 @@ type DeskItem =
   | { key: string; kind: "request"; roomId: string; product: Product; buyer: string }
   | { key: string; kind: "order"; order: Order }
   | { key: string; kind: "listing"; product: Product };
-
-const LISTING_STATUS: Partial<Record<SaleFilter, SaleStatus>> = {
-  ON_SALE: "판매중",
-  RESERVED: "예약중",
-  SOLD: "판매완료",
-};
 
 const TONE: Record<string, string> = {
   판매중: "bg-emerald-50 text-emerald-700",
@@ -63,16 +53,16 @@ const TONE: Record<string, string> = {
 };
 
 function parseFilter(value: string | null): SaleFilter {
-  if (value === "OPEN") return "SHIPPING";
-  if (value === "DONE") return "SETTLED";
-  const match = FILTERS.find((item) => item.id === value);
-  return match?.id ?? "ALL";
+  if (value === "OPEN" || value === "SHIPPING" || value === "REQUEST" || value === "PAYING") return "OPEN";
+  if (value === "DONE" || value === "SETTLED" || value === "SOLD") return "DONE";
+  if (value === "CANCELLED") return "CANCELLED";
+  return "ALL";
 }
 
-function orderBucket(status: OrderStatus): SaleFilter {
-  if (status === "구매확정") return "SETTLED";
+function orderPhase(status: OrderStatus): Exclude<SaleFilter, "ALL"> {
+  if (status === "구매확정") return "DONE";
   if (status === "거래취소") return "CANCELLED";
-  return "SHIPPING";
+  return "OPEN";
 }
 
 function settlementState(status: OrderStatus) {
@@ -93,10 +83,8 @@ export function SalesManageView() {
   const vip = user?.membership === "vip";
 
   const items = mounted ? collectItems(filter, products, orders, rooms) : [];
-  const requestedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const pageCount = Math.max(1, Math.ceil(items.length / GRID_PAGE_SIZE));
-  const page = Math.min(Math.max(Number.isFinite(requestedPage) ? requestedPage : 1, 1), pageCount);
-  const visible = items.slice((page - 1) * GRID_PAGE_SIZE, page * GRID_PAGE_SIZE);
+  const { visibleCount, hasMore, sentinelRef } = useInfiniteGrid(items.length, filter);
+  const visible = items.slice(0, visibleCount);
 
   function replaceQuery(params: URLSearchParams) {
     const query = params.toString();
@@ -107,14 +95,6 @@ export function SalesManageView() {
     const params = new URLSearchParams();
     params.set("tab", "sale");
     if (next !== "ALL") params.set("filter", next);
-    replaceQuery(params);
-  }
-
-  function selectPage(next: number) {
-    const params = new URLSearchParams();
-    params.set("tab", "sale");
-    if (filter !== "ALL") params.set("filter", filter);
-    if (next > 1) params.set("page", String(next));
     replaceQuery(params);
   }
 
@@ -167,15 +147,11 @@ export function SalesManageView() {
                   }}
                   onShip={setShipOrder}
                   onTrack={setTrackOrder}
-                  onDeliver={(order) => {
-                    updateOrder(order.id, { status: "배송완료" });
-                    notify("배송완료로 바꿨어요. 구매확정 전까지 정산은 대기입니다.");
-                  }}
                 />
               </li>
             ))}
           </ul>
-          <GridPager page={page} pageCount={pageCount} total={items.length} onPage={selectPage} label="판매 내역 페이지" />
+          <InfiniteSentinel active={hasMore} sentinelRef={sentinelRef} />
         </>
       )}
 
@@ -198,18 +174,6 @@ function collectItems(
     return [{ key: `request-${room.id}`, kind: "request" as const, roomId: room.id, product, buyer: room.buyerName || room.sellerName }];
   });
   const saleOrders = orders.filter((order) => order.role === "sale");
-  const listingStatus = LISTING_STATUS[filter];
-  if (listingStatus) {
-    return products
-      .filter((product) => product.sellerId === "me" && product.saleStatus === listingStatus)
-      .map((product) => ({ key: `listing-${product.id}`, kind: "listing" as const, product }));
-  }
-  if (filter === "REQUEST") return requests;
-  if (filter === "SHIPPING" || filter === "SETTLED" || filter === "CANCELLED") {
-    return saleOrders
-      .filter((order) => orderBucket(order.status) === filter)
-      .map((order) => ({ key: `order-${order.id}`, kind: "order" as const, order }));
-  }
   const busy = new Set<string>([
     ...requests.flatMap((item) => (item.kind === "request" ? [item.product.id] : [])),
     ...saleOrders.filter((order) => order.status !== "구매확정" && order.status !== "거래취소").map((order) => order.productId),
@@ -217,22 +181,33 @@ function collectItems(
   const listings: DeskItem[] = products
     .filter((product) => product.sellerId === "me" && !busy.has(product.id))
     .map((product) => ({ key: `listing-${product.id}`, kind: "listing" as const, product }));
-  return [
+  const all: DeskItem[] = [
     ...requests,
     ...saleOrders.map((order) => ({ key: `order-${order.id}`, kind: "order" as const, order })),
     ...listings,
   ];
+  if (filter === "ALL") return all;
+  return all.filter((item) => itemPhase(item) === filter);
+}
+
+function itemPhase(item: DeskItem): SaleFilter | "LISTING" {
+  if (item.kind === "request") return "OPEN";
+  if (item.kind === "order") return orderPhase(item.order.status);
+  if (item.product.saleStatus === "판매완료") return "DONE";
+  return "LISTING";
 }
 
 function emptyLabel(filter: SaleFilter) {
-  if (filter === "ON_SALE") return "판매중인 상품이 없어요.";
-  if (filter === "RESERVED") return "예약중인 상품이 없어요.";
-  if (filter === "SOLD") return "판매완료된 상품이 없어요.";
-  if (filter === "REQUEST") return "수락을 기다리는 구매 신청이 없어요.";
-  if (filter === "SHIPPING") return "배송이 진행 중인 주문이 없어요.";
-  if (filter === "SETTLED") return "정산할 구매확정 주문이 없어요.";
-  if (filter === "CANCELLED") return "거래취소된 주문이 없어요.";
+  if (filter === "OPEN") return "진행 중인 거래가 없어요.";
+  if (filter === "DONE") return "완료되거나 정산된 거래가 없어요.";
+  if (filter === "CANCELLED") return "취소된 거래가 없어요.";
   return "판매 내역이 없어요.";
+}
+
+function cardHref(item: DeskItem) {
+  if (item.kind === "order") return `/orders/${item.order.id}`;
+  if (item.kind === "request") return `/chat/${item.roomId}`;
+  return `/sell/${item.product.id}`;
 }
 
 function DeskCard({
@@ -244,7 +219,6 @@ function DeskCard({
   onStatus,
   onShip,
   onTrack,
-  onDeliver,
 }: {
   item: DeskItem;
   product?: Product;
@@ -254,7 +228,6 @@ function DeskCard({
   onStatus: (product: Product, status: SaleStatus) => void;
   onShip: (order: Order) => void;
   onTrack: (order: Order) => void;
-  onDeliver: (order: Order) => void;
 }) {
   const order = item.kind === "order" ? item.order : null;
   const title = item.kind === "order" ? item.order.title : item.product.title;
@@ -267,17 +240,25 @@ function DeskCard({
   const money = order ? settlementOf(order.itemPrice ?? order.price, vip) : null;
   const payout = order?.payoutAmount ?? money?.payoutAmount ?? 0;
   const settlement = order ? settlementState(order.status) : null;
+  const href = cardHref(item);
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-slate-400">
+      <Link
+        href={href}
+        aria-label={title}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-slate-900"
+      />
       <ProductVisual motif={motif} palette={palette} uid={uid} imageUrl={imageUrl} alt="" className="aspect-square w-full" />
       <div className="flex flex-1 flex-col gap-2 p-3">
         {item.kind === "listing" ? (
-          <SaleStatusMenu status={item.product.saleStatus} onChange={(next) => onStatus(item.product, next)} />
+          <div className="relative z-20 w-fit">
+            <SaleStatusMenu status={item.product.saleStatus} onChange={(next) => onStatus(item.product, next)} />
+          </div>
         ) : (
           <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE[badge] ?? "bg-slate-100 text-slate-600"}`}>{badge}</span>
         )}
-        <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900">{title}</h2>
+        <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 group-hover:underline">{title}</h2>
         <p className="text-sm font-semibold tabular-nums text-slate-900">{formatPrice(price)}</p>
         {item.kind === "request" ? <p className="text-xs text-slate-500">구매자 {item.buyer}</p> : null}
         {order ? (
@@ -287,33 +268,48 @@ function DeskCard({
           </p>
         ) : null}
         {item.kind === "listing" ? <p className="text-xs text-slate-500">{item.product.category}</p> : null}
-        <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-          {item.kind === "request" ? (
-            <>
-              <button type="button" onClick={() => onReject(item.roomId)} className={miniGhost}>거절</button>
-              <button type="button" onClick={() => onAccept(item.roomId)} className={miniPrimary}>수락</button>
-            </>
-          ) : null}
-          {item.kind === "listing" ? (
-            <>
-              <Link href={`/sell/${item.product.id}`} className={miniGhost}>수정</Link>
-              <Link href={`/products/${item.product.id}`} className={miniGhost}>상세</Link>
-            </>
-          ) : null}
-          {order && (order.status === "결제완료" || order.status === "배송중") ? (
-            <button type="button" onClick={() => onShip(order)} className={miniPrimary}>{order.tracking ? "운송장 수정" : "운송장 등록"}</button>
-          ) : null}
-          {order?.tracking && order.status !== "거래취소" ? (
-            <button type="button" onClick={() => onTrack(order)} className={miniGhost}>배송 조회</button>
-          ) : null}
-          {order?.status === "배송중" ? (
-            <button type="button" onClick={() => onDeliver(order)} className={miniGhost}>배송완료</button>
-          ) : null}
-          {order ? <Link href={`/orders/${order.id}`} className={miniGhost}>주문 상세</Link> : null}
-        </div>
+        <CardActions item={item} onAccept={onAccept} onReject={onReject} onShip={onShip} onTrack={onTrack} />
       </div>
     </article>
   );
+}
+
+function CardActions({
+  item,
+  onAccept,
+  onReject,
+  onShip,
+  onTrack,
+}: {
+  item: DeskItem;
+  onAccept: (roomId: string) => void;
+  onReject: (roomId: string) => void;
+  onShip: (order: Order) => void;
+  onTrack: (order: Order) => void;
+}) {
+  if (item.kind === "request") {
+    return (
+      <div className="relative z-20 mt-auto grid grid-cols-2 gap-1.5 pt-1">
+        <button type="button" onClick={() => onReject(item.roomId)} className={miniGhost}>거절</button>
+        <button type="button" onClick={() => onAccept(item.roomId)} className={miniPrimary}>수락</button>
+      </div>
+    );
+  }
+  if (item.kind === "order" && item.order.status === "결제완료") {
+    return (
+      <div className="relative z-20 mt-auto pt-1">
+        <button type="button" onClick={() => onShip(item.order)} className={`${miniPrimary} w-full`}>운송장 등록</button>
+      </div>
+    );
+  }
+  if (item.kind === "order" && item.order.status === "배송중") {
+    return (
+      <div className="relative z-20 mt-auto pt-1">
+        <button type="button" onClick={() => onTrack(item.order)} className={`${miniGhost} w-full`}>배송 조회</button>
+      </div>
+    );
+  }
+  return null;
 }
 
 function AcceptDialog({ roomId, onClose }: { roomId: string; onClose: () => void }) {
@@ -388,7 +384,7 @@ function TrackDialog({ order, onClose }: { order: Order; onClose: () => void }) 
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="track-sale-title" className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
         <h2 id="track-sale-title" className="text-lg font-semibold text-slate-900">배송 조회</h2>
-        <p className="mt-2 text-sm text-slate-500">운송장 {order.tracking}</p>
+        <p className="mt-2 text-sm text-slate-500">{order.tracking ? `운송장 ${order.tracking}` : "등록된 운송장이 없어요."}</p>
         <ol className="mt-4 space-y-2 text-sm text-slate-500">
           <li>결제완료 · 주문을 확인했어요</li>
           <li>상품인수 · 택배사에 전달됐어요</li>

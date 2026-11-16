@@ -7,7 +7,7 @@ import { ProductVisual } from "@/components/spark/ProductVisual";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
-export function ProductCard({ product, linked = true, meta }: { product: Product; linked?: boolean; meta?: string }) {
+export function ProductCard({ product, linked = true, meta, showWish = true }: { product: Product; linked?: boolean; meta?: string; showWish?: boolean }) {
   const { wishlistIds, toggleWishlist } = useSpark();
   const mounted = useMounted();
   const wished = mounted && wishlistIds.includes(product.id);
@@ -54,20 +54,22 @@ export function ProductCard({ product, linked = true, meta }: { product: Product
           {copy}
         </div>
       )}
-      <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-full bg-white/90 py-0.5 pl-2 pr-0.5 text-slate-700 shadow-sm">
-        <span className="min-w-4 text-xs font-semibold tabular-nums" aria-label={`찜 수 ${wishCount}`}>
-          {wishCount.toLocaleString("en-US")}
-        </span>
-        <button
-          type="button"
-          aria-pressed={wished}
-          aria-label={wished ? "찜 해제" : "찜하기"}
-          onClick={() => toggleWishlist(product.id)}
-          className="grid h-8 w-8 place-items-center rounded-full transition hover:bg-white"
-        >
-          <HeartIcon filled={wished} />
-        </button>
-      </div>
+      {showWish ? (
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-full bg-white/90 py-0.5 pl-2 pr-0.5 text-slate-700 shadow-sm">
+          <span className="min-w-4 text-xs font-semibold tabular-nums" aria-label={`찜 수 ${wishCount}`}>
+            {wishCount.toLocaleString("en-US")}
+          </span>
+          <button
+            type="button"
+            aria-pressed={wished}
+            aria-label={wished ? "찜 해제" : "찜하기"}
+            onClick={() => toggleWishlist(product.id)}
+            className="grid h-8 w-8 place-items-center rounded-full transition hover:bg-white"
+          >
+            <HeartIcon filled={wished} />
+          </button>
+        </div>
+      ) : null}
     </article>
   );
 }

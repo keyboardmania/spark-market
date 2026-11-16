@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { INQUIRY_TYPES, type InquiryType, type NoticeCategory } from "@/data/mockData";
+import { FAQ_CATEGORIES, INQUIRY_TYPES, type InquiryType, type NoticeCategory } from "@/data/mockData";
 import { useShared } from "@/data/shared";
 import { fieldClass, primaryButtonClass } from "@/components/spark/styles";
 import { WireframeFrame } from "@/features/wireframe/WireframeFrame";
-import { submitInquiry, useInquiries, type InquiryPhoto } from "@/features/support/inquiries/inquiryStore";
+import { PHOTO_ATTACHMENT_LIMIT, PHOTO_ATTACHMENT_LIMIT_MESSAGE, submitInquiry, useInquiries, type InquiryPhoto } from "@/features/support/inquiries/inquiryStore";
 
 const NOTICE_FILTERS = ["전체", "일반", "정책변경", "사기예방"] as const;
 const INQUIRY_FILTERS = ["전체", "답변 완료", "접수 완료"] as const;
@@ -76,27 +76,44 @@ function NoticeList({ pinned }: { pinned: boolean }) {
 
 function FaqList() {
   const faqs = useShared().faqs.filter((item) => !item.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const [filter, setFilter] = useState<(typeof FAQ_FILTERS)[number]>("전체");
+  const visible = faqs.filter((item) => filter === "전체" || item.category === filter);
 
   return (
-    <ul id="faq" className="flex flex-col gap-2">
-      {faqs.map((item) => (
-        <li key={item.id}>
-          <Link href={`/support/faq/${item.id}`} className="flex flex-col gap-1 rounded-2xl border border-slate-200 px-4 py-4 hover:bg-slate-50">
-            <span className="text-xs text-slate-400">{item.createdAt}</span>
-            <span className="text-sm font-medium text-slate-900">{item.question}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div id="faq" className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-2">
+        {FAQ_FILTERS.map((item) => (
+          <button key={item} type="button" onClick={() => setFilter(item)} className={chipClass(filter === item)}>
+            {item}
+          </button>
+        ))}
+      </div>
+      {visible.length === 0 ? (
+        <p className="text-sm text-slate-400">이 카테고리의 질문이 없어요.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {visible.map((item) => (
+            <li key={item.id}>
+              <Link href={`/support/faq/${item.id}`} className="flex flex-col gap-1 rounded-2xl border border-slate-200 px-4 py-4 hover:bg-slate-50">
+                <span className="text-xs text-slate-400">{item.category} · {item.createdAt}</span>
+                <span className="text-sm font-medium text-slate-900">{item.question}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
+
+const FAQ_FILTERS = ["전체", ...FAQ_CATEGORIES] as const;
 
 function InquiryDesk() {
   const inquiries = useInquiries();
   const [filter, setFilter] = useState<(typeof INQUIRY_FILTERS)[number]>("전체");
   const [type, setType] = useState<InquiryType | "">("");
   const [body, setBody] = useState("");
-  const [photo, setPhoto] = useState<InquiryPhoto | null>(null);
+  const [photos, setPhotos] = useState<InquiryPhoto[]>([]);
   const [photoError, setPhotoError] = useState("");
   const [done, setDone] = useState(false);
   const visible = useMemo(
@@ -110,11 +127,15 @@ function InquiryDesk() {
         className="space-y-3 rounded-2xl border border-slate-200 p-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!type || body.trim().length < 1) return;
-          submitInquiry({ type, body: body.trim(), photo });
+          if (!type || body.trim().length < 1 || photoError) return;
+          if (photos.length > PHOTO_ATTACHMENT_LIMIT) {
+            setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
+            return;
+          }
+          submitInquiry({ type, body: body.trim(), photos });
           setType("");
           setBody("");
-          setPhoto(null);
+          setPhotos([]);
           setPhotoError("");
           setDone(true);
         }}
@@ -128,38 +149,43 @@ function InquiryDesk() {
         <label className="block space-y-2 text-xs text-slate-500">내용
           <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={4} className={fieldClass} />
         </label>
-        <label className="flex flex-col gap-2 text-xs text-slate-500">사진 첨부 (최대 1장)
+        <label className="flex flex-col gap-2 text-xs text-slate-500">사진 첨부 (최대 {PHOTO_ATTACHMENT_LIMIT}장)
           <input
             type="file"
             accept="image/png,image/jpeg"
+            multiple
             onChange={(event) => {
               const files = event.target.files;
               if (!files || files.length === 0) {
-                setPhoto(null);
+                setPhotos([]);
                 setPhotoError("");
                 return;
               }
-              if (files.length > 1) {
-                setPhoto(null);
-                setPhotoError("사진은 1장만 첨부할 수 있어요.");
+              if (files.length > PHOTO_ATTACHMENT_LIMIT) {
+                setPhotos([]);
+                setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
                 event.target.value = "";
                 return;
               }
-              const file = files[0];
-              const reader = new FileReader();
-              reader.onload = () => {
-                if (typeof reader.result === "string") {
-                  setPhoto({ name: file.name, url: reader.result });
-                  setPhotoError("");
-                }
-              };
-              reader.readAsDataURL(file);
+              const selected = Array.from(files);
+              Promise.all(selected.map((file) => readPhoto(file))).then((next) => {
+                setPhotos(next);
+                setPhotoError("");
+              });
             }}
             className="block text-sm"
           />
         </label>
-        {photoError ? <p className="text-sm text-rose-600">{photoError}</p> : null}
-        {photo?.url ? <img src={photo.url} alt={photo.name} className="h-24 w-24 rounded-xl object-cover" /> : null}
+        {photoError ? <p role="alert" className="text-sm text-rose-600">{photoError}</p> : null}
+        {photos.length > 0 ? (
+          <ul className="flex flex-wrap gap-2">
+            {photos.map((photo) => (
+              <li key={photo.name}>
+                <img src={photo.url} alt={photo.name} className="h-20 w-20 rounded-xl object-cover" />
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <button type="submit" className={primaryButtonClass}>접수하기</button>
         {done ? <p className="text-sm text-slate-500">문의가 접수 완료되었습니다.</p> : null}
       </form>
@@ -213,4 +239,12 @@ function PostList({ boardId, pinned }: { boardId: string; pinned: boolean }) {
 
 function chipClass(active: boolean) {
   return `rounded-full px-3 py-1.5 text-sm ${active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500"}`;
+}
+
+function readPhoto(file: File) {
+  return new Promise<InquiryPhoto>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, url: typeof reader.result === "string" ? reader.result : "" });
+    reader.readAsDataURL(file);
+  });
 }

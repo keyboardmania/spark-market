@@ -147,12 +147,13 @@ export function useShared() {
 }
 
 export function submitReport(report: Omit<LiveReport, "id" | "status" | "createdAt" | "category" | "media"> & { media?: ReportMedia[] }) {
-  const media = (report.media ?? []).slice(0, 5);
+  if (report.photoCount > 5 || (report.media?.length ?? 0) > 5) return "";
+  const media = report.media ?? [];
   const next: LiveReport = {
     ...report,
     category: reportCategory(report.targetType),
     media,
-    photoCount: Math.min(5, Math.max(report.photoCount, media.length)),
+    photoCount: Math.max(report.photoCount, media.length),
     id: `rpt-${crypto.randomUUID()}`,
     status: "접수",
     createdAt: new Date().toISOString(),

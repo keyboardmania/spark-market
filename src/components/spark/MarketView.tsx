@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ORIGINS,
   PRODUCTS,
@@ -98,6 +98,9 @@ function HomeMarket() {
 }
 
 function CategoryMarket({ category }: { category: Category }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { products, wishlistIds } = useSpark();
   const mounted = useMounted();
   const wishedIds = useMemo(() => new Set(mounted ? wishlistIds : []), [mounted, wishlistIds]);
@@ -106,7 +109,6 @@ function CategoryMarket({ category }: { category: Category }) {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<SortId>("new");
-  const [page, setPage] = useState(1);
   const source = mounted ? products : PRODUCTS;
 
   const filtered = useMemo(() => {
@@ -124,9 +126,27 @@ function CategoryMarket({ category }: { category: Category }) {
     return [...next].sort((a, b) => compareProducts(a, b, sort, wishedIds));
   }, [category, origin, status, minPrice, maxPrice, sort, source, wishedIds]);
 
+  const requestedPage = Math.max(1, Number(searchParams.get("page")) || 1);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
+  const currentPage = Math.min(requestedPage, pageCount);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function resetPage() {
+    if (!searchParams.get("page")) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function openPage(next: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next <= 1) params.delete("page");
+    else params.set("page", String(next));
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    document.getElementById("category-grid")?.scrollIntoView({ block: "start" });
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -139,22 +159,22 @@ function CategoryMarket({ category }: { category: Category }) {
       <section className="mt-12" aria-label="상품 목록">
         <div className="space-y-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-6">
           <FilterRow label="국가">
-            <button type="button" aria-pressed={origin === "전체"} onClick={() => { setOrigin("전체"); setPage(1); }} className={pillClass(origin === "전체")}>
+            <button type="button" aria-pressed={origin === "전체"} onClick={() => { setOrigin("전체"); resetPage(); }} className={pillClass(origin === "전체")}>
               전체
             </button>
             {ORIGINS.map((item) => (
-              <button key={item} type="button" aria-pressed={origin === item} onClick={() => { setOrigin(item); setPage(1); }} className={pillClass(origin === item)}>
+              <button key={item} type="button" aria-pressed={origin === item} onClick={() => { setOrigin(item); resetPage(); }} className={pillClass(origin === item)}>
                 {item}
               </button>
             ))}
           </FilterRow>
 
           <FilterRow label="판매 상태">
-            <button type="button" aria-pressed={status === "active"} onClick={() => { setStatus("active"); setPage(1); }} className={pillClass(status === "active")}>
+            <button type="button" aria-pressed={status === "active"} onClick={() => { setStatus("active"); resetPage(); }} className={pillClass(status === "active")}>
               판매중·예약중
             </button>
             {SALE_STATUSES.map((item) => (
-              <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); setPage(1); }} className={pillClass(status === item)}>
+              <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); resetPage(); }} className={pillClass(status === item)}>
                 {item}
               </button>
             ))}
@@ -164,16 +184,16 @@ function CategoryMarket({ category }: { category: Category }) {
             <p className="w-full text-sm font-medium text-slate-700 sm:w-24">가격대</p>
             <label className="text-sm text-slate-600">
               최저 USD
-              <input inputMode="numeric" value={minPrice} onChange={(event) => { setMinPrice(event.target.value.replace(/\D/g, "")); setPage(1); }} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
+              <input inputMode="numeric" value={minPrice} onChange={(event) => { setMinPrice(event.target.value.replace(/\D/g, "")); resetPage(); }} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
             </label>
             <label className="text-sm text-slate-600">
               최고 USD
-              <input inputMode="numeric" value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value.replace(/\D/g, "")); setPage(1); }} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
+              <input inputMode="numeric" value={maxPrice} onChange={(event) => { setMaxPrice(event.target.value.replace(/\D/g, "")); resetPage(); }} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
             </label>
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div id="category-grid" className="mt-6 flex scroll-mt-24 flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-slate-500">
             {category} · {filtered.length}개
           </p>
@@ -208,11 +228,13 @@ function CategoryMarket({ category }: { category: Category }) {
         )}
         {pageCount > 1 ? (
           <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
+            <button type="button" disabled={currentPage <= 1} onClick={() => openPage(currentPage - 1)} className={pillClass(false)}>이전</button>
             {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
-              <button key={number} type="button" aria-current={number === currentPage ? "page" : undefined} onClick={() => setPage(number)} className={pillClass(number === currentPage)}>
+              <button key={number} type="button" aria-current={number === currentPage ? "page" : undefined} onClick={() => openPage(number)} className={pillClass(number === currentPage)}>
                 {number}
               </button>
             ))}
+            <button type="button" disabled={currentPage >= pageCount} onClick={() => openPage(currentPage + 1)} className={pillClass(false)}>다음</button>
           </div>
         ) : null}
       </section>
@@ -279,7 +301,7 @@ function FilterRow({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function pillClass(active: boolean) {
-  return `shrink-0 rounded-full px-3.5 py-2 text-sm transition ${
+  return `shrink-0 rounded-full px-3.5 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
     active ? "bg-slate-900 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-800"
   }`;
 }

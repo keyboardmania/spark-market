@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
+import { FAQ_CATEGORIES } from "@/data/mockData";
 import { addFaq, addNotice, addTerm, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
 
 export function ContentAdmin() {
@@ -97,6 +98,7 @@ function ContentDesk({
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("계정");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<"일반" | "정책변경" | "사기예방">("일반");
@@ -108,11 +110,14 @@ function ContentDesk({
         <form className="space-y-2" onSubmit={(event) => {
           event.preventDefault();
           if (!question.trim() || !answer.trim()) return;
-          addFaq({ id: crypto.randomUUID(), question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
+          addFaq({ id: crypto.randomUUID(), category: faqCategory, question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
           setQuestion("");
           setAnswer("");
           notice("FAQ를 추가했어요.");
         }}>
+          <select value={faqCategory} onChange={(event) => setFaqCategory(event.target.value as (typeof FAQ_CATEGORIES)[number])} className={fieldClass}>
+            {FAQ_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
+          </select>
           <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="질문" className={fieldClass} />
           <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="답변" className={fieldClass} />
           <button type="submit" className={primaryButtonClass}>FAQ 추가</button>

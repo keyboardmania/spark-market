@@ -114,6 +114,7 @@ export function ProfileForm() {
   const [syncedEmail, setSyncedEmail] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
 
   if (mounted && user && user.email !== syncedEmail) {
     setSyncedEmail(user.email);
@@ -149,15 +150,32 @@ export function ProfileForm() {
       <h2 className="text-lg font-semibold text-slate-900">회원 정보</h2>
       <p className="mt-2 text-sm leading-6 text-slate-500">닉네임과 프로필 사진을 바꾸면 이 브라우저에 저장됩니다. 이메일은 수정할 수 없어요.</p>
       <form className="mt-4 grid max-w-md gap-3" onSubmit={onSubmit} aria-busy={pending}>
-        {photoUrl ? <img src={photoUrl} alt="" className="h-16 w-16 rounded-full object-cover" /> : null}
-        <label className="block space-y-2">
-          <span className="text-xs text-slate-500">프로필 사진</span>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => photoRef.current?.click()}
+            aria-label="프로필 사진 업로드"
+            className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full bg-slate-100 text-slate-400"
+          >
+            {photoUrl ? <img src={photoUrl} alt="" className="h-full w-full object-cover" /> : <span className="text-xs">사진</span>}
+            <span className="absolute inset-x-0 bottom-0 bg-slate-900/60 py-1 text-[10px] font-medium text-white">업로드</span>
+          </button>
+          <div>
+            <button type="button" disabled={pending} onClick={() => photoRef.current?.click()} className={ghostButtonClass}>
+              사진 업로드
+            </button>
+            <p className="mt-2 text-xs text-slate-400">PNG, JPG</p>
+          </div>
           <input
+            ref={photoRef}
             type="file"
             accept="image/png,image/jpeg"
             disabled={pending}
+            className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0];
+              event.target.value = "";
               if (!file) return;
               const reader = new FileReader();
               reader.onload = () => {
@@ -166,7 +184,7 @@ export function ProfileForm() {
               reader.readAsDataURL(file);
             }}
           />
-        </label>
+        </div>
         <label className="block space-y-2">
           <span className="text-xs text-slate-500">닉네임</span>
           <input
@@ -181,7 +199,14 @@ export function ProfileForm() {
         </label>
         <label className="block space-y-2">
           <span className="text-xs text-slate-500">이메일</span>
-          <input value={user.email} readOnly className={`${fieldClass} bg-slate-50 text-slate-500`} />
+          <input
+            value={user.email}
+            readOnly
+            disabled
+            aria-readonly="true"
+            className={`${fieldClass} cursor-not-allowed !bg-slate-100 !text-slate-400`}
+          />
+          <span className="block text-xs font-normal text-slate-400">이메일은 수정할 수 없어요.</span>
         </label>
         <PendingButton pending={pending} label="회원 정보 저장" busyLabel="저장 중" className={primaryButtonClass} />
         {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
@@ -191,26 +216,60 @@ export function ProfileForm() {
 }
 
 export function BankPanel() {
-  const { user, banks, addBank, removeBank } = useSpark();
+  const { user, banks, addBank, updateBank, removeBank } = useSpark();
   if (!user) return <LoginHint />;
-  return <BankForm banks={banks} addBank={addBank} removeBank={removeBank} />;
+  return <BankForm banks={banks} addBank={addBank} updateBank={updateBank} removeBank={removeBank} />;
 }
+
+type BankDraft = { holder: string; bank: string; number: string; isDefault: boolean };
+
+const EMPTY_BANK: BankDraft = { holder: "", bank: "", number: "", isDefault: false };
 
 function BankForm({
   banks,
   addBank,
+  updateBank,
   removeBank,
 }: {
   banks: ReturnType<typeof useSpark>["banks"];
   addBank: ReturnType<typeof useSpark>["addBank"];
+  updateBank: ReturnType<typeof useSpark>["updateBank"];
   removeBank: ReturnType<typeof useSpark>["removeBank"];
 }) {
-  const [holder, setHolder] = useState("");
-  const [bank, setBank] = useState("");
-  const [number, setNumber] = useState("");
-  const [isDefault, setIsDefault] = useState(banks.length === 0);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<BankDraft>(EMPTY_BANK);
   const [error, setError] = useState<string | null>(null);
+  const [lockOpen, setLockOpen] = useState(false);
   const { t } = useI18n();
+  const editing = banks.find((item) => item.id === editingId) ?? null;
+  const lockDefault = editingId === null ? banks.length === 0 : Boolean(editing?.isDefault);
+
+  function openCreate() {
+    if (banks.length >= BANK_LIMIT) {
+      setError(fill(t("bankLimit"), { count: String(BANK_LIMIT) }));
+      return;
+    }
+    setEditingId(null);
+    setDraft({ ...EMPTY_BANK, isDefault: banks.length === 0 });
+    setError(null);
+    setOpen(true);
+  }
+
+  function openEdit(item: (typeof banks)[number]) {
+    setEditingId(item.id);
+    setDraft({ holder: item.holder, bank: item.bank, number: item.number, isDefault: item.isDefault });
+    setError(null);
+    setOpen(true);
+  }
+
+  function closeForm() {
+    setOpen(false);
+    setEditingId(null);
+    setDraft(EMPTY_BANK);
+    setError(null);
+  }
+
   return (
     <section id="accounts">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -218,50 +277,120 @@ function BankForm({
           <h2 className="text-lg font-semibold text-slate-900">{t("bankTitle")}</h2>
           <p className="mt-1 text-xs text-slate-400">{fill(t("bankHint"), { count: String(BANK_LIMIT) })}</p>
         </div>
-        <QuickFill
-          onFill={() => {
-            setHolder(QUICK_BANK.holder);
-            setBank(QUICK_BANK.bank);
-            setNumber(QUICK_BANK.number);
-            setIsDefault(true);
-            setError(null);
-          }}
-        />
+        <button type="button" onClick={openCreate} className={primaryButtonClass}>{t("bankAdd")}</button>
       </div>
-      <ul className="mt-3 space-y-2">
-        {banks.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-            <span>{item.bank} · {item.holder} · {item.number}{item.isDefault ? ` · ${t("bankDefaultTag")}` : ""}</span>
-            <button type="button" onClick={() => removeBank(item.id)} className="text-xs text-slate-400">{t("bankDelete")}</button>
-          </li>
-        ))}
-      </ul>
-      <form
-        className="mt-3 grid max-w-md gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!holder.trim() || !bank.trim() || !number.trim()) return;
-          const result = addBank({ holder: holder.trim(), bank: bank.trim(), number: number.trim(), isDefault });
-          if (result === "limit") {
-            setError(fill(t("bankLimit"), { count: String(BANK_LIMIT) }));
-            return;
-          }
-          setHolder("");
-          setBank("");
-          setNumber("");
-          setError(null);
-        }}
-      >
-        <input value={holder} onChange={(event) => setHolder(event.target.value)} placeholder={t("bankHolder")} className={fieldClass} />
-        <input value={bank} onChange={(event) => setBank(event.target.value)} placeholder={t("bankBank")} className={fieldClass} />
-        <input value={number} onChange={(event) => setNumber(event.target.value)} placeholder={t("bankNumber")} className={fieldClass} />
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
-          {t("bankDefault")}
-        </label>
-        <button type="submit" className={ghostButtonClass}>{t("bankAdd")}</button>
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      </form>
+      {error && !open ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
+      {banks.length === 0 ? (
+        <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-400">등록된 계좌가 없어요.</p>
+      ) : (
+        <ul className="mt-4 grid gap-3">
+          {banks.map((item) => (
+            <li key={item.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-900">{item.bank}</p>
+                    {item.isDefault ? (
+                      <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white">{t("bankDefaultTag")}</span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{item.holder}</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.number}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => openEdit(item)} className={ghostButtonClass}>{t("bankEdit")}</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.isDefault || removeBank(item.id) === "keep-default") {
+                        setLockOpen(true);
+                        return;
+                      }
+                    }}
+                    className={ghostButtonClass}
+                  >
+                    {t("bankDelete")}
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {open ? (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 p-4 sm:items-center" onClick={closeForm}>
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bank-form-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!draft.holder.trim() || !draft.bank.trim() || !draft.number.trim()) {
+                setError("예금주, 은행, 계좌번호를 입력해 주세요.");
+                return;
+              }
+              const payload = { ...draft, isDefault: lockDefault ? true : draft.isDefault };
+              const result = editingId ? updateBank(editingId, payload) : addBank(payload);
+              if (result === "limit") {
+                setError(fill(t("bankLimit"), { count: String(BANK_LIMIT) }));
+                return;
+              }
+              if (result === "keep-default") {
+                setLockOpen(true);
+                return;
+              }
+              closeForm();
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 id="bank-form-title" className="text-base font-semibold text-slate-900">{editingId ? t("bankEdit") : t("bankAdd")}</h3>
+              <QuickFill
+                onFill={() => {
+                  setDraft({
+                    holder: QUICK_BANK.holder,
+                    bank: QUICK_BANK.bank,
+                    number: QUICK_BANK.number,
+                    isDefault: lockDefault ? true : draft.isDefault,
+                  });
+                  setError(null);
+                }}
+              />
+            </div>
+            <div className="mt-4 grid gap-3">
+              <input value={draft.holder} onChange={(event) => setDraft({ ...draft, holder: event.target.value })} placeholder={t("bankHolder")} className={fieldClass} />
+              <input value={draft.bank} onChange={(event) => setDraft({ ...draft, bank: event.target.value })} placeholder={t("bankBank")} className={fieldClass} />
+              <input value={draft.number} onChange={(event) => setDraft({ ...draft, number: event.target.value })} placeholder={t("bankNumber")} className={fieldClass} />
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={lockDefault ? true : draft.isDefault}
+                  disabled={lockDefault}
+                  onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })}
+                />
+                {t("bankDefault")}
+              </label>
+            </div>
+            {error ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
+            <div className="mt-4 flex gap-2">
+              <button type="submit" className={primaryButtonClass}>{editingId ? t("bankSave") : t("bankAdd")}</button>
+              <button type="button" onClick={closeForm} className={ghostButtonClass}>{t("cancel")}</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {lockOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/30 px-4" onClick={() => setLockOpen(false)}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="bank-lock-title" className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <h3 id="bank-lock-title" className="text-base font-semibold text-slate-900">기본 계좌는 삭제할 수 없어요</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">다른 계좌를 기본으로 지정한 뒤에 삭제해 주세요.</p>
+            <button type="button" onClick={() => setLockOpen(false)} className={`${primaryButtonClass} mt-4`}>확인</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

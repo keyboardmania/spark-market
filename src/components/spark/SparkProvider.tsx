@@ -5,6 +5,7 @@ import {
   ADDRESS_LIMIT,
   BANK_LIMIT,
   CHAT_ROOMS,
+  DEMO_WISH_IDS,
   ORDERS,
   PRODUCTS,
   SELLER_REPLIES,
@@ -203,7 +204,8 @@ type SparkContextValue = {
   setLocale: (locale: LocaleId) => void;
   banks: BankAccount[];
   addBank: (draft: Omit<BankAccount, "id">) => "ok" | "limit";
-  removeBank: (id: string) => void;
+  updateBank: (id: string, draft: Omit<BankAccount, "id">) => "ok" | "missing" | "keep-default";
+  removeBank: (id: string) => "ok" | "missing" | "keep-default";
   notifications: AppNotification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -331,7 +333,7 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
   const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(() => seedNotificationSettings());
   const [retention, setRetention] = useState<RetentionNote | null>(null);
   const shared = useShared();
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<string[]>(DEMO_WISH_IDS);
   const [records, setRecords] = useState<Array<Product & { deletedAt: string | null; hardDeleteAt: string | null }>>(() => {
     const removed = new Map(getShared().deletions.filter((item) => item.kind === "상품").map((item) => [item.id, item]));
     return PRODUCTS.map((product) => {
@@ -1014,18 +1016,61 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
 
   const addBank = useCallback((draft: Omit<BankAccount, "id">) => {
     if (banks.length >= BANK_LIMIT) return "limit" as const;
-    const account: BankAccount = { ...draft, id: crypto.randomUUID() };
+    const id = crypto.randomUUID();
     setBanks((current) => {
-      const next = draft.isDefault ? current.map((item) => ({ ...item, isDefault: false })) : current;
-      return [...next, account];
+      if (current.length >= BANK_LIMIT) return current;
+      const isDefault = current.length === 0 || draft.isDefault;
+      const account: BankAccount = {
+        id,
+        holder: draft.holder.trim(),
+        bank: draft.bank.trim(),
+        number: draft.number.trim(),
+        isDefault,
+      };
+      const rest = isDefault ? current.map((item) => ({ ...item, isDefault: false })) : current;
+      return [...rest, account];
     });
     notify("계좌를 저장했어요.");
     return "ok" as const;
   }, [banks.length, notify]);
 
+  const updateBank = useCallback((id: string, draft: Omit<BankAccount, "id">) => {
+    const target = banks.find((item) => item.id === id);
+    if (!target) return "missing" as const;
+    if (target.isDefault && !draft.isDefault) return "keep-default" as const;
+    setBanks((current) => {
+      const found = current.find((item) => item.id === id);
+      if (!found || (found.isDefault && !draft.isDefault)) return current;
+      const isDefault = current.length === 1 || draft.isDefault;
+      return current.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            holder: draft.holder.trim(),
+            bank: draft.bank.trim(),
+            number: draft.number.trim(),
+            isDefault,
+          };
+        }
+        return isDefault ? { ...item, isDefault: false } : item;
+      });
+    });
+    notify("계좌를 수정했어요.");
+    return "ok" as const;
+  }, [banks, notify]);
+
   const removeBank = useCallback((id: string) => {
-    setBanks((current) => current.filter((item) => item.id !== id));
-  }, []);
+    const target = banks.find((item) => item.id === id);
+    if (!target) return "missing" as const;
+    if (target.isDefault) return "keep-default" as const;
+    setBanks((current) => {
+      const found = current.find((item) => item.id === id);
+      if (!found || found.isDefault) return current;
+      return current.filter((item) => item.id !== id);
+    });
+    notify("계좌를 삭제했어요.");
+    return "ok" as const;
+  }, [banks, notify]);
 
   const updateProfile = useCallback((patch: { name?: string; photoUrl?: string }) => {
     if (!user) return false;
@@ -1176,6 +1221,7 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
     setLocale,
     banks,
     addBank,
+    updateBank,
     removeBank,
     notifications,
     markNotificationRead,

@@ -3,8 +3,6 @@
 import { useShared } from "@/data/shared";
 import { WireframeFrame } from "@/features/wireframe/WireframeFrame";
 
-const FAQ_CATEGORIES = ["회원/계정", "거래 분쟁 운영정책", "안전결제"] as const;
-
 export function FaqDetailView({ id }: { id: string }) {
   const faqs = useShared().faqs.filter((item) => !item.deletedAt);
   const index = faqs.findIndex((item) => item.id === id);
@@ -21,7 +19,7 @@ export function FaqDetailView({ id }: { id: string }) {
   return (
     <WireframeFrame eyebrow="FAQ" title={faq.question} backHref="/support/boards/board-faq" backLabel="자주 묻는 질문">
       <div className="flex flex-col gap-6">
-        <p className="text-xs text-slate-400">카테고리 · {FAQ_CATEGORIES[index % FAQ_CATEGORIES.length]}</p>
+        <p className="text-xs text-slate-400">카테고리 · {faq.category}</p>
         <p className="text-sm leading-7 text-slate-700">{faq.answer}</p>
       </div>
     </WireframeFrame>

@@ -965,7 +965,7 @@ function shelfProducts(): Product[] {
     condition: item.condition,
     saleStatus: item.saleStatus ?? (index % 13 === 0 ? "예약중" : "판매중"),
     description: item.description,
-    sellerId: SHELF_SELLERS[index % SHELF_SELLERS.length],
+    sellerId: index === 1 || index === 2 ? "me" : SHELF_SELLERS[index % SHELF_SELLERS.length],
     likes: 12 + ((index * 17) % 180),
     motif: item.motif,
     palette: SHELF_PALETTES[index % SHELF_PALETTES.length],
@@ -1417,6 +1417,14 @@ export const PRODUCTS: Product[] = [
   ...shelfProducts(),
 ];
 
+/** Enough saved products to exercise the 5×5 wishlist infinite scroll. */
+export const DEMO_WISH_IDS = PRODUCTS.filter((product) => product.saleStatus !== "판매완료").slice(0, 30).map((product) => product.id);
+
+export function customsLabel(customsNumber?: string) {
+  const code = customsNumber?.trim();
+  return code ? code : "해당 없음(국내 거래)";
+}
+
 export const CHAT_ROOMS: ChatRoom[] = [
   {
     id: "room-hinata",
@@ -1493,6 +1501,50 @@ export const CHAT_ROOMS: ChatRoom[] = [
         kind: "purchase",
         text: "블리치 루키아 아크릴 스탠드 구매를 신청합니다. 수락해 주세요.",
         at: "오후 7:50",
+      },
+    ],
+  },
+  {
+    id: "room-demo-wait-2",
+    productId: "shelf-2",
+    sellerName: "나",
+    sellerHandle: "@me",
+    unread: 1,
+    buyerName: "박민지",
+    buyerEmail: "minji@spark.market",
+    sellerEmail: "me@spark.market",
+    activity: "활성",
+    updatedAt: "2026-10-26T12:00:00+09:00",
+    purchase: { status: "대기", requestedAt: "2026-10-26T12:00:00+09:00" },
+    messages: [
+      {
+        id: "m-wait-2",
+        sender: "seller",
+        kind: "purchase",
+        text: "하이큐!! 보쿠토 코타로 넨도로이드 구매를 신청합니다. 수락해 주세요.",
+        at: "오후 12:00",
+      },
+    ],
+  },
+  {
+    id: "room-demo-wait-3",
+    productId: "shelf-3",
+    sellerName: "나",
+    sellerHandle: "@me",
+    unread: 0,
+    buyerName: "최윤아",
+    buyerEmail: "yuna@spark.market",
+    sellerEmail: "me@spark.market",
+    activity: "활성",
+    updatedAt: "2026-10-25T15:10:00+09:00",
+    purchase: { status: "대기", requestedAt: "2026-10-25T15:10:00+09:00" },
+    messages: [
+      {
+        id: "m-wait-3",
+        sender: "seller",
+        kind: "purchase",
+        text: "하이큐!! 코즈메 켄마 넨도로이드 구매를 신청합니다. 수락해 주세요.",
+        at: "오후 3:10",
       },
     ],
   },
@@ -1675,6 +1727,47 @@ export const ADMIN_WATCH_ROOMS: ChatRoom[] = [
   },
 ];
 
+const DEMO_ORDER_STATUSES: OrderStatus[] = ["결제완료", "배송중", "배송완료", "구매확정", "거래취소"];
+const DEMO_BUYERS = ["김서연", "박민지", "소라", "최윤아", "한도윤"];
+const DEMO_SELLERS = ["하루", "모모", "카드서랍", "치이", "오렌지코트"];
+const DEMO_PAYMENTS = ["신용/체크카드", "토스페이", "카카오페이", "페이팔", "네이버페이"];
+
+function createDemoOrders(): Order[] {
+  return PRODUCTS.slice(0, 30).map((product, index) => {
+    const status = DEMO_ORDER_STATUSES[index % DEMO_ORDER_STATUSES.length];
+    const overseas = index % 2 === 1;
+    const role: Order["role"] = index % 4 === 0 ? "sale" : "purchase";
+    const itemPrice = product.price;
+    const feeAmount = Math.round(itemPrice * 0.1 * 100) / 100;
+    return {
+      id: `SPK-D${250000 + index}`,
+      role,
+      productId: product.id,
+      title: product.title,
+      ip: String(product.ip),
+      price: itemPrice,
+      quantity: 1,
+      condition: product.condition,
+      motif: product.motif,
+      palette: product.palette,
+      imageUrl: product.imageUrl,
+      status,
+      orderedAt: `2026.09.${String((index % 27) + 1).padStart(2, "0")}`,
+      counterpart: role === "sale" ? DEMO_BUYERS[index % DEMO_BUYERS.length] : DEMO_SELLERS[index % DEMO_SELLERS.length],
+      address: overseas ? "Osaka, Kita-ku, Umeda 1-1" : "서울특별시 성동구 연무장길 12, 4층",
+      paymentMethod: DEMO_PAYMENTS[index % DEMO_PAYMENTS.length],
+      tracking: status === "결제완료" || status === "거래취소" ? null : `DEMO${880000 + index}`,
+      review: null,
+      customsNumber: overseas ? `P${String(120000000000 + index).slice(0, 12)}` : undefined,
+      itemPrice,
+      shippingFee: product.shippingFee,
+      feeRate: 0.1,
+      feeAmount,
+      payoutAmount: Math.round((itemPrice - feeAmount) * 100) / 100,
+    };
+  });
+}
+
 export const ORDERS: Order[] = [
   {
     id: "SPK-240221",
@@ -1711,6 +1804,7 @@ export const ORDERS: Order[] = [
     paymentMethod: "신용/체크카드",
     tracking: "SPK3849201",
     review: null,
+    customsNumber: "P123456789012",
   },
   {
     id: "SPK-240144",
@@ -1784,6 +1878,7 @@ export const ORDERS: Order[] = [
     paymentMethod: "신용/체크카드",
     tracking: null,
     review: null,
+    customsNumber: "P220011334455",
   },
   {
     id: "SPK-239640",
@@ -1829,6 +1924,7 @@ export const ORDERS: Order[] = [
       requestedAt: "2026-10-20T00:00:00+09:00",
     },
   },
+  ...createDemoOrders(),
 ];
 
 export const SELLER_REPLIES = [
@@ -2234,8 +2330,12 @@ export const NOTICES: Notice[] = [
   { id: "nt-1", category: "일반", title: "Spark 오픈 안내", body: "수집가 간 거래를 위한 C2C 마켓이 열렸습니다.", createdAt: "2026.10.01", deletedAt: null },
 ];
 
+export const FAQ_CATEGORIES = ["구매/판매", "결제/정산", "계정", "배송"] as const;
+export type FaqCategory = (typeof FAQ_CATEGORIES)[number];
+
 export type Faq = {
   id: string;
+  category: FaqCategory;
   question: string;
   answer: string;
   createdAt: string;
@@ -2243,9 +2343,11 @@ export type Faq = {
 };
 
 export const FAQS: Faq[] = [
-  { id: "faq-3", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 구매하기를 누르면 채팅이 열리고 판매자에게 수락 요청이 전송됩니다. 판매자가 수락하면 채팅의 결제하기로 안전결제를 진행합니다.", createdAt: "2026.10.27", deletedAt: null },
-  { id: "faq-2", question: "정산 수수료는 얼마인가요?", answer: "상품 금액 기준 비구독 10%, VIP 6%입니다. 배송비에는 수수료를 매기지 않습니다.", createdAt: "2026.10.18", deletedAt: null },
-  { id: "faq-1", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null },
+  { id: "faq-5", category: "배송", question: "운송장은 어디서 확인하나요?", answer: "구매 내역에서 배송중 주문을 열면 운송장과 배송 조회를 볼 수 있습니다. 판매자는 결제완료 후 주문 상세에서 운송장을 등록합니다.", createdAt: "2026.11.02", deletedAt: null },
+  { id: "faq-4", category: "계정", question: "이메일과 닉네임은 바꿀 수 있나요?", answer: "이메일은 가입 후 바꿀 수 없습니다. 닉네임과 프로필 사진은 마이페이지에서 수정할 수 있어요.", createdAt: "2026.11.01", deletedAt: null },
+  { id: "faq-3", category: "구매/판매", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 구매하기를 누르면 채팅이 열리고 판매자에게 수락 요청이 전송됩니다. 판매자가 수락하면 채팅의 결제하기로 안전결제를 진행합니다.", createdAt: "2026.10.27", deletedAt: null },
+  { id: "faq-2", category: "결제/정산", question: "정산 수수료는 얼마인가요?", answer: "상품 금액 기준 비구독 10%, VIP 6%입니다. 배송비에는 수수료를 매기지 않습니다.", createdAt: "2026.10.18", deletedAt: null },
+  { id: "faq-1", category: "구매/판매", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null },
 ];
 
 export type BoardPost = {

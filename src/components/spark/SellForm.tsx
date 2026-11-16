@@ -444,6 +444,7 @@ export function SellForm({ productId }: { productId?: string }) {
           <ProductCard
             product={preview}
             linked={false}
+            showWish={false}
             meta={[draft.category || "물품 종류", draft.country || "국가"].join(" · ")}
           />
           <p className="text-sm leading-6 text-slate-500">{preview.description || "설명을 입력하면 여기에 표시돼요."}</p>

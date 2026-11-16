@@ -25,7 +25,7 @@ export function InquiryDetailView({ id }: { id: string }) {
       backLabel="문의 내역"
     >
       <div className="flex flex-col gap-6">
-        <InquiryMedia photo={inquiry.photo} />
+        <InquiryMedia photos={inquiry.photos} />
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium text-slate-900">문의 내용</h2>
           <p className="text-sm leading-6 text-slate-700">{inquiry.body}</p>

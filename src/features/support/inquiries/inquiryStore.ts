@@ -3,13 +3,16 @@
 import { useSyncExternalStore } from "react";
 import { USER_INQUIRIES, type InquiryType, type UserInquiryStatus } from "@/data/mockData";
 
+export const PHOTO_ATTACHMENT_LIMIT = 5;
+export const PHOTO_ATTACHMENT_LIMIT_MESSAGE = "사진은 최대 5장까지 첨부할 수 있어요.";
+
 export type InquiryPhoto = { name: string; url: string };
 
 export type InquiryRecord = {
   id: string;
   type: InquiryType;
   body: string;
-  photo: InquiryPhoto | null;
+  photos: InquiryPhoto[];
   status: "접수 완료" | "답변 완료";
   createdAt: string;
   reply: string;
@@ -23,7 +26,7 @@ let records: InquiryRecord[] = USER_INQUIRIES.map((item) => ({
   id: item.id,
   type: item.type,
   body: item.body,
-  photo: item.photoName ? { name: item.photoName, url: "" } : null,
+  photos: item.photoName ? [{ name: item.photoName, url: "" }] : [],
   status: normalizeStatus(item.status),
   createdAt: item.createdAt,
   reply: item.reply,
@@ -49,7 +52,8 @@ export function inquiryById(id: string) {
   return records.find((item) => item.id === id) ?? null;
 }
 
-export function submitInquiry(input: { type: InquiryType; body: string; photo: InquiryPhoto | null }) {
+export function submitInquiry(input: { type: InquiryType; body: string; photos: InquiryPhoto[] }) {
+  if (input.photos.length > PHOTO_ATTACHMENT_LIMIT) return false;
   const now = new Date();
   const createdAt = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`;
   emit([
@@ -57,11 +61,12 @@ export function submitInquiry(input: { type: InquiryType; body: string; photo: I
       id: `inq-${crypto.randomUUID()}`,
       type: input.type,
       body: input.body,
-      photo: input.photo,
+      photos: input.photos,
       status: "접수 완료",
       createdAt,
       reply: "",
     },
     ...records,
   ]);
+  return true;
 }

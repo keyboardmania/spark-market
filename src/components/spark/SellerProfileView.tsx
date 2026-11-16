@@ -10,7 +10,7 @@ import { useShared } from "@/data/shared";
 
 export function SellerProfileView({ id }: { id: string }) {
   const seller = findSeller(id);
-  const { products, user } = useSpark();
+  const { products, user, orders, updateOrder, notify } = useSpark();
   const reviews = useShared().reviews.filter((review) => review.sellerId === id && !review.deletedAt);
   if (!seller) {
     return (
@@ -100,6 +100,46 @@ export function SellerProfileView({ id }: { id: string }) {
           </ul>
         )}
       </section>
+
+      {seller.id === "me" ? (
+        <SellerSettlementTest
+          orders={orders.filter((order) => order.role === "sale" && order.status !== "구매확정" && order.status !== "거래취소")}
+          onConfirm={(orderId) => {
+            updateOrder(orderId, { status: "구매확정" });
+            notify("테스트용으로 구매확정했어요. 주문 상세의 정산 상태가 정산완료로 바뀌어요.");
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function SellerSettlementTest({
+  orders,
+  onConfirm,
+}: {
+  orders: { id: string; title: string; status: string }[];
+  onConfirm: (orderId: string) => void;
+}) {
+  return (
+    <section className="mt-10 rounded-3xl border border-dashed border-amber-300 bg-amber-50 p-5">
+      <h2 className="text-lg font-semibold text-slate-900">테스트용 정산</h2>
+      <p className="mt-2 text-sm leading-6 text-amber-900">구매확정 전인 판매 주문을 구매자가 확정한 것으로 바꿀 수 있어요. 정산 상태는 주문 상세에서 정산완료로 보입니다.</p>
+      {orders.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-500">확정할 판매 주문이 없어요.</p>
+      ) : (
+        <ul className="mt-4 flex flex-col gap-3">
+          {orders.map((order) => (
+            <li key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3">
+              <div>
+                <Link href={`/orders/${order.id}`} className="text-sm font-medium text-slate-900 underline-offset-4 hover:underline">{order.title}</Link>
+                <p className="mt-1 text-xs text-slate-500">{order.id} · {order.status}</p>
+              </div>
+              <button type="button" onClick={() => onConfirm(order.id)} className={ghostButtonClass}>테스트용: 구매자로 구매확정</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

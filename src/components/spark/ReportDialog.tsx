@@ -4,6 +4,7 @@ import { useState } from "react";
 import { submitReport, type LiveReport } from "@/data/shared";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { PHOTO_ATTACHMENT_LIMIT, PHOTO_ATTACHMENT_LIMIT_MESSAGE } from "@/features/support/inquiries/inquiryStore";
 
 const LABELS: Record<LiveReport["targetType"], string> = {
   상품: "상품 신고",
@@ -26,11 +27,13 @@ export function ReportButton({
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
   const [photos, setPhotos] = useState(0);
+  const [photoError, setPhotoError] = useState("");
 
   function close() {
     setOpen(false);
     setBody("");
     setPhotos(0);
+    setPhotoError("");
   }
 
   return (
@@ -48,7 +51,7 @@ export function ReportButton({
             onClick={(event) => event.stopPropagation()}
             onSubmit={(event) => {
               event.preventDefault();
-              if (!body.trim()) return;
+              if (!body.trim() || photoError || photos > PHOTO_ATTACHMENT_LIMIT) return;
               submitReport({
                 targetType,
                 targetId,
@@ -68,13 +71,24 @@ export function ReportButton({
               <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={4} className={fieldClass} />
             </label>
             <label className="mt-3 block space-y-2">
-              <span className="text-xs text-slate-500">사진 최대 5장</span>
+              <span className="text-xs text-slate-500">사진 최대 {PHOTO_ATTACHMENT_LIMIT}장</span>
               <input
                 type="file"
                 accept="image/png,image/jpeg"
                 multiple
-                onChange={(event) => setPhotos(Math.min(5, event.target.files?.length ?? 0))}
+                onChange={(event) => {
+                  const count = event.target.files?.length ?? 0;
+                  if (count > PHOTO_ATTACHMENT_LIMIT) {
+                    setPhotos(0);
+                    setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
+                    event.target.value = "";
+                    return;
+                  }
+                  setPhotos(count);
+                  setPhotoError("");
+                }}
               />
+              {photoError ? <span role="alert" className="block text-xs text-rose-600">{photoError}</span> : null}
               {photos > 0 ? <span className="block text-xs text-slate-400">{photos}장 선택</span> : null}
             </label>
             <div className="mt-5 flex justify-end gap-2">

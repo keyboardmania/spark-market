@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SparkVipBadge } from "@/components/spark/Badges";
 import { ProductCard } from "@/components/spark/ProductCard";
-import { ghostButtonClass } from "@/components/spark/styles";
+import { fieldClass, ghostButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
-import { SANCTIONS, type SparkUser } from "@/data/mockData";
+import { SANCTIONS, SELLERS, type SparkUser } from "@/data/mockData";
+import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
+import { useShared } from "@/data/shared";
+
+const NEXT_MEMBERSHIP_DATE = "2026.12.16";
 
 const TRADE_LINKS = [
   { href: "/orders?tab=buy", label: "구매 내역", hint: "결제, 배송, 구매확정" },
@@ -41,23 +45,120 @@ export function MyPageFrame({ children }: { children: ReactNode }) {
 export function MyPageView() {
   const router = useRouter();
   const mounted = useMounted();
-  const { user, logout, wishlistIds, orders } = useSpark();
+  const { user, logout, wishlistIds, orders, updateProfile } = useSpark();
+  const reviews = useShared().reviews;
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [profileError, setProfileError] = useState("");
   const purchaseCount = mounted ? orders.filter((order) => order.role === "purchase").length : 0;
   const saleCount = mounted ? orders.filter((order) => order.role === "sale").length : 0;
+  const rating = useMemo(() => {
+    const received = reviews.filter((item) => item.sellerId === "me" && !item.deletedAt);
+    if (received.length === 0) return SELLERS.find((item) => item.id === "me")?.rating ?? 0;
+    return Math.round((received.reduce((sum, item) => sum + item.rating, 0) / received.length) * 10) / 10;
+  }, [reviews]);
+  const signedIn = mounted && Boolean(user);
+  const nextPayment = user?.membership === "vip" ? NEXT_MEMBERSHIP_DATE : "구독 없음";
+
+  function saveName() {
+    const next = nameDraft.trim();
+    if (!next) {
+      setProfileError("닉네임을 입력해 주세요.");
+      return;
+    }
+    if (!updateProfile({ name: next })) {
+      setProfileError("닉네임을 저장하지 못했어요.");
+      return;
+    }
+    setNameOpen(false);
+    setProfileError("");
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <section className="rounded-2xl bg-slate-50/80 p-6">
         <div className="flex items-center gap-4">
-          <Avatar name={mounted && user ? user.name : "S"} photoUrl={mounted ? user?.photoUrl : undefined} />
-          <div className="min-w-0">
+          {signedIn ? (
+            <button
+              type="button"
+              aria-label="프로필 사진 변경"
+              onClick={() => photoRef.current?.click()}
+              className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full"
+            >
+              <Avatar name={user?.name ?? "S"} photoUrl={user?.photoUrl} />
+              <span className="absolute inset-x-0 bottom-0 bg-slate-900/60 py-0.5 text-[10px] font-medium text-white">변경</span>
+            </button>
+          ) : (
+            <Avatar name="S" />
+          )}
+          <input
+            ref={photoRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file || !user) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                if (typeof reader.result !== "string") return;
+                if (!updateProfile({ photoUrl: reader.result })) {
+                  setProfileError("사진을 저장하지 못했어요. 용량을 줄여 주세요.");
+                }
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] tracking-[0.22em] text-slate-400">MY</p>
-            <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-900">
-              {mounted && user ? user.name : "마이페이지"}
-            </h1>
+            {signedIn && nameOpen ? (
+              <form className="mt-1 flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
+                <input
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setNameOpen(false);
+                  }}
+                  autoFocus
+                  aria-label="닉네임"
+                  className={`${fieldClass} h-10`}
+                />
+                <button type="submit" className="shrink-0 text-sm font-medium text-slate-900">저장</button>
+                <button type="button" onClick={() => setNameOpen(false)} className="shrink-0 text-sm text-slate-400">취소</button>
+              </form>
+            ) : (
+              <div className="mt-1 flex items-center gap-1.5">
+                <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900">
+                  {signedIn ? user?.name : "마이페이지"}
+                </h1>
+                {signedIn ? (
+                  <button
+                    type="button"
+                    aria-label="닉네임 수정"
+                    onClick={() => {
+                      setNameDraft(user?.name ?? "");
+                      setProfileError("");
+                      setNameOpen(true);
+                    }}
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-slate-400 hover:bg-white hover:text-slate-900"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null}
+              </div>
+            )}
             <p className="mt-1 truncate text-sm text-slate-500">
-              {mounted && user ? `${user.email} · ${providerLabel(user.provider)}` : "로그인하면 거래와 설정이 이 계정에 모여요."}
+              {signedIn ? `${user?.email} · ${providerLabel(user?.provider ?? "email")}` : "로그인하면 거래와 설정이 이 계정에 모여요."}
             </p>
+            {signedIn ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">평균 별점 ★ {rating.toFixed(1)}</span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">다음 결제 예정일 {nextPayment}</span>
+              </div>
+            ) : null}
+            {profileError ? <p role="alert" className="mt-2 text-xs text-rose-600">{profileError}</p> : null}
           </div>
         </div>
         {mounted && user?.membership === "vip" ? (
@@ -101,21 +202,25 @@ export function WishlistPanel() {
   const mounted = useMounted();
   const { wishlistIds, products } = useSpark();
   const wished = mounted ? products.filter((product) => wishlistIds.includes(product.id)) : [];
+  const { visibleCount, hasMore, sentinelRef } = useInfiniteGrid(wished.length, wishlistIds.join(","));
+  const visible = wished.slice(0, visibleCount);
 
   return (
     <section>
       <h2 className="text-lg font-semibold text-slate-900">찜한 상품</h2>
+      <p className="mt-1 text-sm text-slate-500">{wished.length}개 · 25개씩 이어서 보여요.</p>
       {wished.length === 0 ? (
         <p className="mt-4 text-sm text-slate-400">아직 찜한 상품이 없어요.</p>
       ) : (
-        <ul className="mt-4 grid grid-cols-2 gap-4">
-          {wished.map((product) => (
+        <ul className="mt-4 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+          {visible.map((product) => (
             <li key={product.id}>
               <ProductCard product={product} />
             </li>
           ))}
         </ul>
       )}
+      <InfiniteSentinel active={hasMore} sentinelRef={sentinelRef} />
     </section>
   );
 }
@@ -174,11 +279,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function Avatar({ name, photoUrl }: { name: string; photoUrl?: string }) {
-  if (photoUrl) return <img src={photoUrl} alt="" className="h-14 w-14 rounded-full object-cover" />;
+  if (photoUrl) return <img src={photoUrl} alt="" className="h-full w-full object-cover" />;
   return (
-    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-slate-900 text-lg font-medium text-white">
+    <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-slate-900 text-lg font-medium text-white">
       {name.slice(0, 1)}
     </span>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="M12.5 3.5l4 4L7 17H3v-4L12.5 3.5z" strokeLinejoin="round" />
+    </svg>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   CATEGORIES,
   ORIGINS,
@@ -20,8 +20,7 @@ import { useMounted } from "@/components/spark/useMounted";
 
 export type ProductFeed = "popular" | "new";
 
-const PAGE_SIZE = 20;
-const LOAD_DELAY_MS = 280;
+const PAGE_SIZE = 25;
 
 const FEEDS = {
   popular: {
@@ -46,6 +45,8 @@ type StatusFilter = "active" | SaleStatus;
 
 export function ProductBrowseView({ feed }: { feed: ProductFeed }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { products, wishlistIds } = useSpark();
   const mounted = useMounted();
   const wishedIds = useMemo(() => new Set(mounted ? wishlistIds : []), [mounted, wishlistIds]);
@@ -57,11 +58,8 @@ export function ProductBrowseView({ feed }: { feed: ProductFeed }) {
   const [status, setStatus] = useState<StatusFilter>("active");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [showTop, setShowTop] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const requestRef = useRef(0);
+  const filterKeyRef = useRef("");
 
   const filtered = useMemo(() => {
     const min = minPrice.trim() === "" ? null : Number(minPrice);
@@ -80,50 +78,31 @@ export function ProductBrowseView({ feed }: { feed: ProductFeed }) {
   }, [category, origin, status, minPrice, maxPrice, source, feed, wishedIds]);
 
   const filterKey = `${feed}|${category}|${origin}|${status}|${minPrice}|${maxPrice}`;
+  const requestedPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(requestedPage, pageCount);
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
-    requestRef.current += 1;
-    setVisibleCount(PAGE_SIZE);
-    setLoadingMore(false);
-  }, [filterKey]);
+    if (filterKeyRef.current === filterKey) return;
+    const previous = filterKeyRef.current;
+    filterKeyRef.current = filterKey;
+    if (!previous) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("page")) return;
+    params.delete("page");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [filterKey, pathname, router]);
 
-  const hasMore = visibleCount < filtered.length;
-  const visible = filtered.slice(0, visibleCount);
-
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !hasMore) return;
-
-    let timer = 0;
-    let cancelled = false;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (cancelled || timer) return;
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        const request = requestRef.current;
-        const total = filtered.length;
-        setLoadingMore(true);
-        observer.disconnect();
-        timer = window.setTimeout(() => {
-          if (cancelled || request !== requestRef.current) {
-            if (!cancelled) setLoadingMore(false);
-            return;
-          }
-          setVisibleCount((count) => Math.min(count + PAGE_SIZE, total));
-          setLoadingMore(false);
-        }, LOAD_DELAY_MS);
-      },
-      { rootMargin: "240px 0px" },
-    );
-
-    observer.observe(node);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-      window.clearTimeout(timer);
-      setLoadingMore(false);
-    };
-  }, [hasMore, filtered.length, visibleCount, filterKey]);
+  function openPage(next: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next <= 1) params.delete("page");
+    else params.set("page", String(next));
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    document.getElementById("browse-grid")?.scrollIntoView({ block: "start" });
+  }
 
   useEffect(() => {
     function onScroll() {
@@ -211,8 +190,8 @@ export function ProductBrowseView({ feed }: { feed: ProductFeed }) {
         </div>
       </div>
 
-      <p className="mt-6 text-sm text-slate-500">
-        {category === "전체" ? "전체" : category} · {visible.length}/{filtered.length}개
+      <p id="browse-grid" className="mt-6 scroll-mt-24 text-sm text-slate-500">
+        {category === "전체" ? "전체" : category} · {filtered.length}개 · {page} / {pageCount} 페이지
       </p>
 
       {filtered.length === 0 ? (
@@ -229,14 +208,20 @@ export function ProductBrowseView({ feed }: { feed: ProductFeed }) {
         </ul>
       )}
 
-      {loadingMore ? (
-        <p role="status" className="py-8 text-center text-sm text-slate-400">
-          다음 상품을 불러오는 중
-        </p>
-      ) : null}
-      {hasMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {!hasMore && filtered.length > PAGE_SIZE ? (
-        <p className="py-8 text-center text-sm text-slate-400">마지막 상품이에요.</p>
+      {pageCount > 1 ? (
+        <nav aria-label="페이지" className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <button type="button" disabled={page <= 1} onClick={() => openPage(page - 1)} className={pageButtonClass(false)}>
+            이전
+          </button>
+          {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+            <button key={number} type="button" aria-current={number === page ? "page" : undefined} onClick={() => openPage(number)} className={pageButtonClass(number === page)}>
+              {number}
+            </button>
+          ))}
+          <button type="button" disabled={page >= pageCount} onClick={() => openPage(page + 1)} className={pageButtonClass(false)}>
+            다음
+          </button>
+        </nav>
       ) : null}
 
       {showTop ? (
@@ -266,5 +251,11 @@ function FilterRow({ label, children }: { label: string; children: ReactNode }) 
 function pillClass(active: boolean) {
   return `shrink-0 rounded-full px-3.5 py-2 text-sm transition ${
     active ? "bg-slate-900 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-800"
+  }`;
+}
+
+function pageButtonClass(active: boolean) {
+  return `rounded-full px-3.5 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+    active ? "bg-slate-900 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-slate-900"
   }`;
 }

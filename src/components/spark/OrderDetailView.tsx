@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { CANCEL_REASONS, SELLERS, formatPrice, getProductById } from "@/data/mockData";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { CANCEL_REASONS, SELLERS, customsLabel, formatPrice, getProductById, type Order } from "@/data/mockData";
 import { orderTradePresentation } from "@/components/spark/OrdersView";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
@@ -151,7 +151,11 @@ export function OrderDetailView({ id }: { id: string }) {
               <dt className="text-xs text-slate-400">배송지</dt>
               <dd className="mt-1 text-slate-700">{order.address}</dd>
             </div>
-            {order.tracking ? (
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-slate-400">통관번호</dt>
+              <dd className="mt-1 text-slate-700">{customsLabel(order.customsNumber)}</dd>
+            </div>
+            {order.tracking && order.role !== "sale" ? (
               <div>
                 <dt className="text-xs text-slate-400">운송장</dt>
                 <dd className="mt-1 text-slate-700">{order.tracking}</dd>
@@ -159,6 +163,10 @@ export function OrderDetailView({ id }: { id: string }) {
             ) : null}
           </dl>
         </section>
+
+        {order.role === "sale" ? (
+          <SellerShipping key={`${order.id}:${order.status}:${order.tracking ?? ""}`} order={order} />
+        ) : null}
 
         <section className="rounded-2xl border border-slate-200 p-4">
           <h2 className="text-sm font-medium text-slate-900">{counterpartLabel}</h2>
@@ -271,6 +279,22 @@ export function OrderDetailView({ id }: { id: string }) {
         </form>
       ) : null}
 
+      {order.role === "sale" && order.status !== "구매확정" && order.status !== "거래취소" ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-4">
+          <p className="text-sm text-amber-900">테스트용 정산 확인입니다. 구매자가 구매확정한 것으로 처리하면 정산 상태가 정산완료로 바뀝니다.</p>
+          <button
+            type="button"
+            onClick={() => {
+              updateOrder(order.id, { status: "구매확정" });
+              notify("테스트용으로 구매확정했어요. 정산 상태가 정산완료로 바뀌어요.");
+            }}
+            className={`${ghostButtonClass} mt-3`}
+          >
+            테스트용: 구매자로 구매확정
+          </button>
+        </div>
+      ) : null}
+
       {showCancelButton ? (
         <div className="mt-6">
           <button type="button" disabled={cancelDisabled} onClick={openCancel} className={ghostButtonClass}>
@@ -293,6 +317,70 @@ export function OrderDetailView({ id }: { id: string }) {
         />
       ) : null}
     </div>
+  );
+}
+
+function SellerShipping({ order }: { order: Order }) {
+  const { updateOrder, notify } = useSpark();
+  const [tracking, setTracking] = useState(order.tracking ?? "");
+  const canShip = order.status === "결제완료" || order.status === "배송중";
+  const canDeliver = order.status === "배송중";
+  const delivered = order.status === "배송완료" || order.status === "구매확정";
+
+  if (order.status === "거래취소" && !order.tracking) return null;
+
+  function saveTracking(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = tracking.trim();
+    if (!next) return;
+    const nextStatus = order.status === "결제완료" ? "배송중" : order.status;
+    updateOrder(order.id, { tracking: next, status: nextStatus });
+    notify(order.status === "결제완료" ? "운송장을 등록하고 배송중으로 바꿨어요." : "운송장을 수정했어요.");
+  }
+
+  function markDelivered() {
+    updateOrder(order.id, { status: "배송완료" });
+    notify("배송완료로 바꿨어요. 구매확정 전까지 정산은 대기입니다.");
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 p-4">
+      <h2 className="text-sm font-medium text-slate-900">배송</h2>
+      {order.tracking ? (
+        <>
+          <p className="mt-2 text-sm text-slate-500">운송장 {order.tracking}</p>
+          <ol className="mt-4 space-y-2 text-sm text-slate-500">
+            <li className="text-slate-800">결제완료 · 주문을 확인했어요</li>
+            <li className={order.status === "결제완료" ? "" : "text-slate-800"}>상품인수 · 택배사에 전달됐어요</li>
+            <li className={order.status !== "결제완료" ? "text-slate-800" : ""}>배송중 · 이동하고 있어요</li>
+            <li className={delivered ? "text-slate-800" : ""}>배송완료</li>
+          </ol>
+        </>
+      ) : (
+        <p className="mt-2 text-sm text-slate-500">등록된 운송장이 없어요.</p>
+      )}
+      {order.status === "배송완료" ? (
+        <p className="mt-4 text-sm text-slate-500">배송완료로 처리됐어요. 구매확정은 구매자가 진행해요.</p>
+      ) : null}
+      {canShip ? (
+        <form className="mt-4 space-y-3" onSubmit={saveTracking}>
+          <label className="block space-y-2 text-sm">
+            <span className="text-xs font-medium text-slate-500">운송장 번호</span>
+            <input value={tracking} onChange={(event) => setTracking(event.target.value)} className={fieldClass} placeholder="운송장 번호" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" disabled={!tracking.trim()} className={primaryButtonClass}>
+              {order.tracking ? "운송장 수정" : "운송장 등록"}
+            </button>
+            {canDeliver ? (
+              <button type="button" onClick={markDelivered} className={ghostButtonClass}>
+                배송완료
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
+    </section>
   );
 }
 
