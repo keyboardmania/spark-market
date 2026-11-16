@@ -11,7 +11,7 @@ import { useMounted } from "@/components/spark/useMounted";
 import { SANCTIONS, type SparkUser } from "@/data/mockData";
 
 const TRADE_LINKS = [
-  { href: "/orders", label: "거래 내역", hint: "구매와 판매, 배송·정산" },
+  { href: "/orders?tab=buy", label: "구매 내역", hint: "결제, 배송, 구매확정" },
   { href: "/orders?tab=sale", label: "판매 내역", hint: "수락, 배송, 정산" },
   { href: "/mypage/wishlist", label: "찜한 상품", hint: "관심 매물" },
   { href: "/mypage/reviews", label: "내 리뷰", hint: "작성한 후기" },

@@ -25,6 +25,7 @@ import { SaleStatusMenu } from "@/components/spark/SaleStatusMenu";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import { useI18n } from "@/features/i18n/useI18n";
 import { productDeleteBlock, saleStatusLabel } from "@/features/trade/productGuards";
 
 const MEDIA_HINT = "사진첩에서만 선택 · 최소 1개, 최대 10개 · 사진(png, jpg, jpeg), 동영상(mp4, mov)";
@@ -129,6 +130,7 @@ function readFile(file: File) {
 
 export function SellForm({ productId }: { productId?: string }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { addProduct, updateProduct, products, orders, rooms, isProductDeleted, notify } = useSpark();
   const mounted = useMounted();
   const hydratedId = useRef<string | null>(null);
@@ -136,6 +138,7 @@ export function SellForm({ productId }: { productId?: string }) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
   const editing = Boolean(productId);
+  const contentLocked = editing && draft.saleStatus === "판매완료";
   const product = productId ? products.find((item) => item.id === productId) : undefined;
   const deleted = productId ? isProductDeleted(productId) : false;
   const palette = paletteFor(draft.category);
@@ -177,7 +180,9 @@ export function SellForm({ productId }: { productId?: string }) {
     setDraft((current) => ({ ...current, saleStatus: next }));
     if (!product) return;
     const updated = updateProduct(product.id, { saleStatus: next });
-    if (updated) notify(`판매 상태를 ${saleStatusLabel(next)} 바꿨어요. 가격과 내용을 이어서 수정할 수 있어요.`);
+    if (updated) {
+      notify(next === "판매완료" ? t("sellSoldLock") : `판매 상태를 ${saleStatusLabel(next)} 바꿨어요. 가격과 내용을 이어서 수정할 수 있어요.`);
+    }
   }
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
@@ -188,6 +193,7 @@ export function SellForm({ productId }: { productId?: string }) {
   }
 
   async function onFiles(files: FileList | null) {
+    if (contentLocked) return;
     const incoming = files ? [...files] : [];
     if (incoming.length === 0) return;
     const invalid = incoming.filter((file) => !mediaKind(file));
@@ -212,14 +218,17 @@ export function SellForm({ productId }: { productId?: string }) {
   }
 
   function removeMedia(id: string) {
+    if (contentLocked) return;
     setDraft((current) => ({ ...current, media: orderMedia(current.media.filter((item) => item.id !== id)) }));
   }
 
   function reorderMedia(sourceId: string, targetId: string) {
+    if (contentLocked) return;
     setDraft((current) => ({ ...current, media: relocateListingImage(current.media, sourceId, targetId) }));
   }
 
   function applyAnalysis(analysis: ListingAnalysis) {
+    if (contentLocked) return;
     setDraft((current) => ({
       ...current,
       price: String(analysis.recommendedPrice),
@@ -274,8 +283,8 @@ export function SellForm({ productId }: { productId?: string }) {
         notify("삭제한 상품은 수정할 수 없어요.");
         return;
       }
-      setNotice(`${saved.title} 매물을 수정했어요.`);
       notify("매물을 수정했어요.");
+      router.push(`/products/${product.id}`);
       return;
     }
 
@@ -313,9 +322,11 @@ export function SellForm({ productId }: { productId?: string }) {
       <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">SELL</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{editing ? "상품 수정" : "상품 등록"}</h1>
       <p className="mt-2 text-sm text-slate-500">
-        {editing
-          ? "판매 상태는 완료 이후에도 뱃지에서 다시 바꿀 수 있어요. 상태를 바꾸면 가격과 내용도 자유롭게 수정됩니다."
-          : "사진첩에서 미디어를 올리고 판매 상태를 고르세요. 기본값은 판매중입니다."}
+        {contentLocked
+          ? t("sellSoldLock")
+          : editing
+            ? "판매 상태는 언제든 바꿀 수 있어요. 판매완료가 아니면 가격과 내용을 수정할 수 있습니다."
+            : "사진첩에서 미디어를 올리고 판매 상태를 고르세요. 기본값은 판매중입니다."}
       </p>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -325,6 +336,7 @@ export function SellForm({ productId }: { productId?: string }) {
               <ListingMediaUploader
                 media={media}
                 error={errors.media}
+                disabled={contentLocked}
                 onFiles={(files) => void onFiles(files)}
                 onRemove={removeMedia}
                 onReorder={reorderMedia}
@@ -332,18 +344,18 @@ export function SellForm({ productId }: { productId?: string }) {
               <Link href="/prohibited" className="inline-flex text-xs font-medium text-slate-700 underline-offset-4 hover:underline">판매 금지 품목</Link>
             </div>
 
-            <AiAssist key={cover?.id ?? "no-cover"} media={media} onApply={applyAnalysis} />
+            <AiAssist key={cover?.id ?? "no-cover"} media={media} disabled={contentLocked} onApply={applyAnalysis} />
 
             <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">상품명</span>
-              <input value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder="예: 미개봉 플라워 부케" className={fieldClass} />
+              <input value={draft.title} disabled={contentLocked} onChange={(event) => update("title", event.target.value)} placeholder="예: 미개봉 플라워 부케" className={fieldClass} />
               {errors.title ? <span className="block text-xs text-rose-600">{errors.title}</span> : null}
             </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-xs font-medium text-slate-500">물품 종류</span>
-                <select value={draft.category} onChange={(event) => update("category", event.target.value as Category | "")} className={fieldClass}>
+                <select value={draft.category} disabled={contentLocked} onChange={(event) => update("category", event.target.value as Category | "")} className={fieldClass}>
                   <option value="">선택해 주세요</option>
                   {CATEGORIES.map((category) => (
                     <option key={category} value={category}>{category}</option>
@@ -353,7 +365,7 @@ export function SellForm({ productId }: { productId?: string }) {
               </label>
               <label className="block space-y-2">
                 <span className="text-xs font-medium text-slate-500">국가</span>
-                <select value={draft.country} onChange={(event) => update("country", event.target.value as Origin | "")} className={fieldClass}>
+                <select value={draft.country} disabled={contentLocked} onChange={(event) => update("country", event.target.value as Origin | "")} className={fieldClass}>
                   <option value="">선택해 주세요</option>
                   {ORIGINS.map((origin) => (
                     <option key={origin} value={origin}>{origin}</option>
@@ -366,7 +378,9 @@ export function SellForm({ productId }: { productId?: string }) {
             <div className="space-y-2">
               <span className="text-xs font-medium text-slate-500">판매 상태</span>
               <SaleStatusMenu status={draft.saleStatus} onChange={changeStatus} />
-              <span className="block text-xs text-slate-400">판매중, 예약중, 판매완료를 언제든 다시 고를 수 있어요.</span>
+              <span className="block text-xs text-slate-400">
+                {contentLocked ? t("sellSoldLock") : "판매중, 예약중, 판매완료를 언제든 다시 고를 수 있어요."}
+              </span>
             </div>
 
             <label className="block space-y-2">
@@ -374,6 +388,7 @@ export function SellForm({ productId }: { productId?: string }) {
               <input
                 inputMode="numeric"
                 value={draft.price}
+                disabled={contentLocked}
                 onChange={(event) => update("price", event.target.value.replace(/\D/g, ""))}
                 placeholder="0"
                 className={fieldClass}
@@ -387,6 +402,7 @@ export function SellForm({ productId }: { productId?: string }) {
               <span className="text-xs font-medium text-slate-500">설명</span>
               <textarea
                 value={draft.description}
+                disabled={contentLocked}
                 onChange={(event) => update("description", event.target.value)}
                 rows={4}
                 placeholder="구성품, 사용감을 10자 이상 적어 주세요."
@@ -402,7 +418,7 @@ export function SellForm({ productId }: { productId?: string }) {
                   const included = item === "포함";
                   const active = draft.shippingIncluded === included;
                   return (
-                    <button key={item} type="button" aria-pressed={active} onClick={() => update("shippingIncluded", included)} className={`rounded-full px-3 py-2.5 text-sm ${active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500"}`}>
+                    <button key={item} type="button" aria-pressed={active} disabled={contentLocked} onClick={() => update("shippingIncluded", included)} className={`rounded-full px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${active ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-500"}`}>
                       {item}
                     </button>
                   );
@@ -418,7 +434,7 @@ export function SellForm({ productId }: { productId?: string }) {
           </div>
           {editing && product ? (
             <div className="mt-4">
-              <DeleteProductButton product={product} onDeleted={() => router.push("/sell")} />
+              <DeleteProductButton product={product} onDeleted={() => router.push("/orders?tab=sale")} />
             </div>
           ) : null}
         </form>
@@ -460,7 +476,7 @@ export function SellForm({ productId }: { productId?: string }) {
   );
 }
 
-function AiAssist({ media, onApply }: { media: ProductMedia[]; onApply: (analysis: ListingAnalysis) => void }) {
+function AiAssist({ media, disabled = false, onApply }: { media: ProductMedia[]; disabled?: boolean; onApply: (analysis: ListingAnalysis) => void }) {
   const alive = useRef(true);
   const image = representativeImage(media);
   const [pending, setPending] = useState(false);
@@ -475,6 +491,7 @@ function AiAssist({ media, onApply }: { media: ProductMedia[]; onApply: (analysi
   }, []);
 
   async function lookup() {
+    if (disabled) return;
     const target = representativeImage(media);
     if (!target || target.kind !== "image") {
       setResult(null);
@@ -507,7 +524,7 @@ function AiAssist({ media, onApply }: { media: ProductMedia[]; onApply: (analysi
         <button
           type="button"
           onClick={() => void lookup()}
-          disabled={!image || pending}
+          disabled={disabled || !image || pending}
           className={`${ghostButtonClass} shrink-0`}
         >
           {pending ? "분석 중" : "AI 분석 조회하기"}

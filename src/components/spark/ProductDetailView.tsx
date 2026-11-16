@@ -115,7 +115,7 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
         {product.sellerId === "me" ? (
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href={`/sell/${product.id}`} className={ghostButtonClass}>수정</Link>
-            <DeleteProductButton product={product} onDeleted={() => router.push("/")} />
+            <DeleteProductButton product={product} onDeleted={() => router.push("/orders?tab=sale")} />
           </div>
         ) : null}
 

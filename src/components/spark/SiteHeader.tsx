@@ -9,6 +9,7 @@ import { LOCALES, translate } from "@/i18n";
 import { roomInInbox } from "@/features/chat/rooms";
 import { WireframeBanner } from "@/features/wireframe/WireframeBanner";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { useI18n } from "@/features/i18n/useI18n";
 import { useMounted } from "@/components/spark/useMounted";
 
 export function SiteHeader() {
@@ -90,7 +91,7 @@ export function SiteHeader() {
                   onClear={clearNotifications}
                 />
                 <IconLink href="/chat" label={t("chat")} badge={unread} />
-                <ProfileMenu key={pathname} user={sessionUser} onSignOut={signOut} labels={{ mypage: t("mypage"), orders: t("orders"), logout: t("logout") }} />
+                <ProfileMenu key={pathname} user={sessionUser} onSignOut={signOut} labels={{ mypage: t("mypage"), logout: t("logout") }} />
               </>
             ) : (
               <>
@@ -266,8 +267,9 @@ function ProfileMenu({
 }: {
   user: SparkUser;
   onSignOut: () => void;
-  labels: { mypage: string; orders: string; logout: string };
+  labels: { mypage: string; logout: string };
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 12 });
   const rootRef = useRef<HTMLDivElement>(null);
@@ -308,8 +310,8 @@ function ProfileMenu({
     >
       <p className="truncate px-4 py-2 text-xs text-slate-400">{user.email}</p>
       <ProfileLink href="/mypage" onPick={() => setOpen(false)}>{labels.mypage}</ProfileLink>
-      <ProfileLink href="/orders" onPick={() => setOpen(false)}>{labels.orders}</ProfileLink>
-      <ProfileLink href="/orders?tab=sale" onPick={() => setOpen(false)}>판매 내역</ProfileLink>
+      <ProfileLink href="/orders?tab=buy" onPick={() => setOpen(false)}>{t("menuPurchases")}</ProfileLink>
+      <ProfileLink href="/orders?tab=sale" onPick={() => setOpen(false)}>{t("menuSales")}</ProfileLink>
       <ProfileLink href="/mypage/wishlist" onPick={() => setOpen(false)}>찜한 상품</ProfileLink>
       <ProfileLink href="/chat" onPick={() => setOpen(false)}>채팅</ProfileLink>
       <ProfileLink href="/support" onPick={() => setOpen(false)}>고객센터</ProfileLink>

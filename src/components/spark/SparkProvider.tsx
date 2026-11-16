@@ -38,6 +38,8 @@ import { WIREFRAME_ADDRESSES, WIREFRAME_BANKS, WIREFRAME_LOGIN } from "@/feature
 
 export type TradeRole = "buyer" | "seller";
 
+type ChatDraft = Pick<ChatMessage, "text" | "imageUrl" | "videoUrl" | "langLabel" | "originalText"> & { sender?: ChatMessage["sender"] };
+
 const ROLE_STORAGE_KEY = "spark-trade-role";
 const LOCALE_COOKIE = "spark-locale";
 
@@ -190,7 +192,7 @@ type SparkContextValue = {
   ensureRoom: (product: Product) => string | null;
   startPurchase: (product: Product) => string | null;
   requestPurchase: (roomId: string) => void;
-  sendMessage: (roomId: string, message: Pick<ChatMessage, "text" | "imageUrl" | "langLabel" | "originalText"> & { sender?: ChatMessage["sender"] }) => void;
+  sendMessage: (roomId: string, message: ChatDraft, extras?: ChatDraft[]) => void;
   decidePurchase: (roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => void;
   completePurchase: (roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => string | null;
   markRead: (roomId: string) => void;
@@ -781,7 +783,7 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
     notify(UI[locale].requestSent);
   }, [locale, notify, records, rooms, tradeRole]);
 
-  const sendMessage = useCallback((roomId: string, message: Pick<ChatMessage, "text" | "imageUrl" | "langLabel" | "originalText"> & { sender?: ChatMessage["sender"] }) => {
+  const sendMessage = useCallback((roomId: string, message: ChatDraft, extras: ChatDraft[] = []) => {
     const now = Date.now();
     if (now < chatPausedUntil) {
       notify("메시지를 너무 빠르게 보내 10초 동안 전송이 멈춰 있어요.");
@@ -795,30 +797,32 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
     }
     const sender = message.sender ?? "me";
     const viewerIsSeller = tradeRole === "seller";
-    const warned = Boolean(message.text && /계좌|카톡|카카오|010-?\d|개인정보|외부결제/.test(message.text));
-    const source = message.originalText ?? message.text;
-    const mine: ChatMessage = {
+    const warned = [message, ...extras].some((item) => item.text && /계좌|카톡|카카오|010-?\d|개인정보|외부결제/.test(item.text));
+    const outgoing = [message, ...extras].map((item): ChatMessage => ({
       id: crypto.randomUUID(),
-      sender,
+      sender: item.sender ?? sender,
       at: formatTime(),
-      text: message.text,
-      originalText: source,
-      langLabel: message.langLabel,
-      imageUrl: message.imageUrl,
-    };
+      text: item.text,
+      originalText: item.originalText ?? item.text,
+      langLabel: item.langLabel,
+      imageUrl: item.imageUrl,
+      videoUrl: item.videoUrl,
+    }));
     const warning: ChatMessage | null = warned
       ? { id: crypto.randomUUID(), sender: "system", at: formatTime(), systemKey: "externalPayWarning", text: UI.ko.externalPayWarning }
       : null;
     setRooms((current) =>
       current.map((room) =>
-        room.id === roomId ? { ...room, listed: true, updatedAt: new Date().toISOString(), messages: [...room.messages, ...(warning ? [warning] : []), mine] } : room,
+        room.id === roomId ? { ...room, listed: true, updatedAt: new Date().toISOString(), messages: [...room.messages, ...(warning ? [warning] : []), ...outgoing] } : room,
       ),
     );
     if (viewerIsSeller || sender !== "me") return;
     const counterpart = rooms.find((item) => item.id === roomId)?.sellerName ?? "상대";
     setTypingRoomId(roomId);
 
-    const replyText = message.imageUrl
+    const replyText = message.videoUrl || extras.some((item) => item.videoUrl)
+      ? "영상 잘 봤어요. 이어서 확인해 볼게요."
+      : message.imageUrl || extras.some((item) => item.imageUrl)
       ? "사진 잘 봤어요. 이어서 확인해 볼게요."
       : message.text && /^[\s✨💖🧸😊🙌🎀😭⚡]+$/.test(message.text)
         ? "ㅎㅎ 궁금한 점 있으면 글로도 남겨 주세요."

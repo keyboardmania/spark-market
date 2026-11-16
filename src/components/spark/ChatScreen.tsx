@@ -21,6 +21,25 @@ import { PayoutSummary } from "@/features/seller-payout/PayoutSummary";
 import { useSellerPayout } from "@/features/seller-payout/useSellerPayout";
 
 const EMOJIS = ["✨", "💖", "🧸", "😊", "🙌", "🎀", "😭", "⚡"];
+const CHAT_MEDIA_LIMIT = 10;
+const CHAT_MEDIA_EXT = new Set(["png", "jpg", "jpeg", "mp4", "mov"]);
+
+type PendingMedia = { id: string; name: string; kind: "image" | "video"; url: string };
+
+function mediaKind(file: File): PendingMedia["kind"] | null {
+  const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1).toLowerCase() : "";
+  if (!CHAT_MEDIA_EXT.has(extension)) return null;
+  return extension === "mp4" || extension === "mov" ? "video" : "image";
+}
+
+function readFile(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error ?? new Error("read"));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const router = useRouter();
@@ -32,6 +51,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [paidFlash, setPaidFlash] = useState(false);
   const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState<PendingMedia[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [showList, setShowList] = useState(!initialRoomId);
   const [connected, setConnected] = useState(false);
@@ -115,6 +135,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
 
   function selectRoom(id: string) {
     setActiveId(id);
+    setPending([]);
     setShowList(false);
   }
 
@@ -122,6 +143,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
     if (!active) return;
     leaveRoom(active.id);
     setLeaveOpen(false);
+    setPending([]);
     setActiveId(null);
     setShowList(true);
     if (initialRoomId) router.replace("/chat");
@@ -136,31 +158,39 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
 
   function submit() {
     const text = draft.trim();
-    if (!active || !text) return;
-    sendMessage(active.id, { text, sender: "me" });
+    if (!active || (!text && pending.length === 0)) return;
+    if (text) sendMessage(active.id, { text, sender: "me" });
+    const media = pending.map((file) => file.kind === "video"
+      ? { videoUrl: file.url, text: t("chatVideo"), sender: "me" as const }
+      : { imageUrl: file.url, text: t("chatSentPhoto"), sender: "me" as const });
+    if (media.length > 0) sendMessage(active.id, media[0], media.slice(1));
+    setPending([]);
     setDraft("");
     setEmojiOpen(false);
   }
 
-  function attach(file: File | undefined) {
-    if (!active || !file) return;
-    const used = active.messages.filter((message) => message.imageUrl).length;
-    const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".") + 1).toLowerCase() : "";
-    if (used >= 10) {
+  async function attach(list: FileList | null) {
+    if (!active || !list || list.length === 0) return;
+    const sent = active.messages.filter((message) => message.imageUrl || message.videoUrl).length;
+    const roomLeft = CHAT_MEDIA_LIMIT - sent - pending.length;
+    if (roomLeft <= 0) {
       notify(t("chatMediaLimit"));
       return;
     }
-    if (!["png", "jpg", "jpeg", "mp4", "mov"].includes(extension)) {
-      notify(t("chatMediaType"));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        sendMessage(active.id, { imageUrl: reader.result, text: t("chatSentPhoto"), sender: "me" });
-      }
-    };
-    reader.readAsDataURL(file);
+    const incoming = [...list];
+    const invalid = incoming.filter((file) => !mediaKind(file));
+    const valid = incoming.filter((file) => mediaKind(file));
+    if (invalid.length > 0) notify(t("chatMediaType"));
+    if (valid.length > roomLeft) notify(t("chatMediaLimit"));
+    const accepted = valid.slice(0, roomLeft);
+    if (accepted.length === 0) return;
+    const loaded = await Promise.all(accepted.map(async (file) => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      kind: mediaKind(file) ?? "image",
+      url: await readFile(file),
+    })));
+    setPending((current) => [...current, ...loaded].slice(0, CHAT_MEDIA_LIMIT));
   }
 
   return (
@@ -273,8 +303,29 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                     ))}
                   </div>
                 ) : null}
+                {pending.length > 0 ? (
+                  <ul className="mb-2 flex gap-2 overflow-x-auto" aria-label={t("chatAttachLabel")}>
+                    {pending.map((file) => (
+                      <li key={file.id} className="relative h-16 w-16 shrink-0">
+                        {file.kind === "video" ? (
+                          <video src={file.url} muted className="h-16 w-16 rounded-xl bg-slate-900 object-cover" />
+                        ) : (
+                          <img src={file.url} alt={file.name} className="h-16 w-16 rounded-xl object-cover" />
+                        )}
+                        <button
+                          type="button"
+                          aria-label={t("chatRemoveFile")}
+                          onClick={() => setPending((current) => current.filter((item) => item.id !== file.id))}
+                          className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-white text-xs text-slate-500 shadow"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="flex items-center gap-2">
-                  <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.mp4,.mov,image/png,image/jpeg,video/mp4,video/quicktime" className="sr-only" onChange={(event) => { attach(event.target.files?.[0]); event.target.value = ""; }} />
+                  <input ref={fileRef} type="file" multiple accept=".png,.jpg,.jpeg,.mp4,.mov,image/png,image/jpeg,video/mp4,video/quicktime" className="sr-only" onChange={(event) => { void attach(event.target.files); event.target.value = ""; }} />
                   <button type="button" aria-label={t("chatAttachLabel")} onClick={() => fileRef.current?.click()} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 text-xs text-slate-500">
                     {t("chatAttach")}
                   </button>

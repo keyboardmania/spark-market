@@ -131,25 +131,7 @@ export function SalesManageView() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">ORDERS</p>
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">구매/판매 내역</h1>
-          <p className="mt-2 text-sm text-slate-500">판매 상품과 주문을 한 목록에서 봅니다. 수락·거절, 배송, 정산까지 여기서 처리해요.</p>
-        </div>
-        <Link href="/sell" className={ghostButtonClass}>상품 등록</Link>
-      </div>
-
-      <div className="mt-6 flex gap-2" role="tablist" aria-label="내역 구분">
-        <button type="button" role="tab" aria-selected={false} onClick={() => router.replace("/orders?tab=buy", { scroll: false })} className="rounded-full bg-slate-50 px-4 py-2 text-sm text-slate-500">
-          구매 내역
-        </button>
-        <button type="button" role="tab" aria-selected className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white">
-          판매 내역
-        </button>
-      </div>
-
+    <>
       <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="판매 상태">
         {FILTERS.map((item) => (
           <button
@@ -200,7 +182,7 @@ export function SalesManageView() {
       {acceptRoomId ? <AcceptDialog roomId={acceptRoomId} onClose={() => setAcceptRoomId(null)} /> : null}
       {shipOrder ? <ShipDialog order={shipOrder} onClose={() => setShipOrder(null)} onSave={saveTracking} /> : null}
       {trackOrder ? <TrackDialog order={trackOrder} onClose={() => setTrackOrder(null)} /> : null}
-    </div>
+    </>
   );
 }
 

@@ -8,12 +8,14 @@ const MAX_MEDIA = 10;
 export function ListingMediaUploader({
   media,
   error,
+  disabled = false,
   onFiles,
   onRemove,
   onReorder,
 }: {
   media: ProductMedia[];
   error?: string;
+  disabled?: boolean;
   onFiles: (files: FileList | null) => void;
   onRemove: (id: string) => void;
   onReorder: (sourceId: string, targetId: string) => void;
@@ -37,14 +39,16 @@ export function ListingMediaUploader({
       <p className="mt-1 text-xs leading-5 text-slate-400">
         사진을 끌어 1번 자리에 놓으면 그 사진이 대표 이미지가 되고 나머지 순서가 다시 매겨집니다. 동영상은 대표와 AI 분석에서 빠집니다.
       </p>
-      <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
+      <div className={`mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4 ${disabled ? "opacity-60" : ""}`}>
         <input
           ref={fileRef}
           type="file"
           multiple
+          disabled={disabled}
           accept=".png,.jpg,.jpeg,.mp4,.mov,image/png,image/jpeg,video/mp4,video/quicktime"
           className="sr-only"
           onChange={(event) => {
+            if (disabled) return;
             onFiles(event.target.files);
             event.target.value = "";
           }}
@@ -61,9 +65,9 @@ export function ListingMediaUploader({
               return (
                 <li key={item.id} className="relative w-24">
                   <div
-                    draggable={item.kind === "image"}
+                    draggable={!disabled && item.kind === "image"}
                     onDragStart={(event) => {
-                      if (item.kind !== "image") {
+                      if (disabled || item.kind !== "image") {
                         event.preventDefault();
                         return;
                       }
@@ -74,20 +78,24 @@ export function ListingMediaUploader({
                     }}
                     onDragEnd={clearDrag}
                     onDragOver={(event) => {
-                      if (!draggingId.current || draggingId.current === item.id) return;
+                      if (disabled || !draggingId.current || draggingId.current === item.id) return;
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
                       setOverId(item.id);
                     }}
                     onDrop={(event) => {
                       event.preventDefault();
+                      if (disabled) {
+                        clearDrag();
+                        return;
+                      }
                       const sourceId = event.dataTransfer.getData("text/plain") || draggingId.current;
                       const targetId = item.id;
                       clearDrag();
                       if (!sourceId || sourceId === targetId) return;
                       onReorder(sourceId, targetId);
                     }}
-                    className={`relative rounded-xl ${item.kind === "image" ? "cursor-grab active:cursor-grabbing" : ""} ${item.thumbnailed ? "ring-2 ring-rose-500 ring-offset-2" : ""} ${coverTarget ? "ring-rose-600 ring-offset-4" : ""} ${shiftTarget ? "ring-2 ring-slate-900 ring-offset-2" : ""} ${dragging ? "opacity-40" : ""}`}
+                    className={`relative rounded-xl ${!disabled && item.kind === "image" ? "cursor-grab active:cursor-grabbing" : ""} ${item.thumbnailed ? "ring-2 ring-rose-500 ring-offset-2" : ""} ${coverTarget ? "ring-rose-600 ring-offset-4" : ""} ${shiftTarget ? "ring-2 ring-slate-900 ring-offset-2" : ""} ${dragging ? "opacity-40" : ""}`}
                   >
                     {item.kind === "video" ? (
                       <video src={item.url} className="pointer-events-none h-24 w-24 rounded-xl bg-slate-900 object-cover" muted />
@@ -102,8 +110,9 @@ export function ListingMediaUploader({
                   </div>
                   <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => onRemove(item.id)}
-                    className="absolute -right-1 -top-1 z-10 grid h-6 w-6 place-items-center rounded-full bg-white text-xs text-slate-500 shadow"
+                    className="absolute -right-1 -top-1 z-10 grid h-6 w-6 place-items-center rounded-full bg-white text-xs text-slate-500 shadow disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label={`${item.name} 삭제`}
                   >
                     ×
@@ -117,7 +126,7 @@ export function ListingMediaUploader({
           </ul>
         )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => fileRef.current?.click()} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm">
+          <button type="button" disabled={disabled} onClick={() => fileRef.current?.click()} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm disabled:cursor-not-allowed disabled:text-slate-300">
             사진첩에서 선택
           </button>
           <span className="text-xs text-slate-400">{media.length}/{MAX_MEDIA}</span>
