@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { primaryButtonClass } from "@/components/spark/styles";
 import { AccountPicker } from "@/features/seller-payout/AccountPicker";
 import { AddressPicker } from "@/features/seller-payout/AddressPicker";
@@ -9,6 +10,7 @@ import { useSellerPayout } from "@/features/seller-payout/useSellerPayout";
 import { WireframeFrame } from "@/features/wireframe/WireframeFrame";
 
 export function SellerPayoutView({ roomId }: { roomId: string }) {
+  const router = useRouter();
   const payout = useSellerPayout(roomId);
 
   if (!payout.room || !payout.product || !payout.payout) {
@@ -40,7 +42,9 @@ export function SellerPayoutView({ roomId }: { roomId: string }) {
               type="button"
               className={primaryButtonClass}
               disabled={!payout.addressId || !payout.accountId}
-              onClick={payout.confirm}
+              onClick={() => {
+                if (payout.confirm()) router.push(`/chat/${roomId}`);
+              }}
             >
               저장하고 구매 수락
             </button>

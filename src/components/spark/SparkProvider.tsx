@@ -30,7 +30,16 @@ import {
   type SparkUser,
 } from "@/data/mockData";
 import type { LocaleId } from "@/i18n";
+import { UI, fill } from "@/features/i18n/ui";
 import { applyRetentionPolicy, getShared, useShared } from "@/data/shared";
+import { cloneChatRooms, dropRoom } from "@/features/chat/rooms";
+import { productDeleteBlock } from "@/features/trade/productGuards";
+import { WIREFRAME_ADDRESSES, WIREFRAME_BANKS, WIREFRAME_LOGIN } from "@/features/wireframe/demoProfile";
+
+export type TradeRole = "buyer" | "seller";
+
+const ROLE_STORAGE_KEY = "spark-trade-role";
+const LOCALE_COOKIE = "spark-locale";
 
 type StoredAccount = {
   name: string;
@@ -123,6 +132,30 @@ function readStoredAccounts(): StoredAccount[] {
   }
 }
 
+function sessionUserFromAccount(session: SparkUser, account: StoredAccount): SparkUser {
+  return {
+    name: account.name,
+    email: account.email,
+    provider: account.provider,
+    photoUrl: account.photoUrl,
+    membership: account.membership ?? session.membership,
+  };
+}
+
+function replaceStoredUser(next: SparkUser) {
+  const stored = readStoredAuth();
+  if (!stored) return;
+  const current = stored.user;
+  const same =
+    current.name === next.name &&
+    current.email === next.email &&
+    current.provider === next.provider &&
+    current.photoUrl === next.photoUrl &&
+    current.membership === next.membership;
+  if (same) return;
+  storeAuth({ ...stored, user: next });
+}
+
 type SparkContextValue = {
   user: SparkUser | null;
   login: (user: SparkUser) => void;
@@ -138,7 +171,7 @@ type SparkContextValue = {
   isProductDeleted: (id: string) => boolean;
   addProduct: (product: Product) => void;
   updateProduct: (id: string, patch: Partial<Product>) => boolean;
-  softDeleteProduct: (id: string) => void;
+  softDeleteProduct: (id: string) => boolean;
   addresses: ShippingAddress[];
   addAddress: (draft: AddressDraft) => "ok" | "limit";
   updateAddress: (id: string, draft: AddressDraft) => "ok" | "missing" | "keep-default";
@@ -152,13 +185,17 @@ type SparkContextValue = {
   typingRoomId: string | null;
   activeChatRoomId: string | null;
   setActiveChatRoomId: (roomId: string | null) => void;
+  tradeRole: TradeRole;
+  setTradeRole: (role: TradeRole) => void;
   ensureRoom: (product: Product) => string | null;
   startPurchase: (product: Product) => string | null;
-  sendMessage: (roomId: string, message: Pick<ChatMessage, "text" | "imageUrl"> & { sender?: ChatMessage["sender"] }) => void;
-  decidePurchase: (roomId: string, accept: boolean) => void;
+  requestPurchase: (roomId: string) => void;
+  sendMessage: (roomId: string, message: Pick<ChatMessage, "text" | "imageUrl" | "langLabel" | "originalText"> & { sender?: ChatMessage["sender"] }) => void;
+  decidePurchase: (roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => void;
   completePurchase: (roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => string | null;
   markRead: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
+  deleteRoom: (roomId: string) => void;
   notify: (message: string) => void;
   locale: LocaleId;
   setLocale: (locale: LocaleId) => void;
@@ -172,11 +209,12 @@ type SparkContextValue = {
   clearNotifications: () => void;
   notificationSettings: NotificationSetting[];
   setNotificationEnabled: (alarmId: string, enabled: boolean) => void;
-  updateProfile: (patch: { name?: string; photoUrl?: string }) => void;
+  updateProfile: (patch: { name?: string; photoUrl?: string }) => boolean;
+  confirmPassword: (email: string, password: string) => boolean;
   requestResetCode: (email: string) => boolean;
   resetPassword: (email: string, code: string, nextPassword: string) => boolean;
   changePassword: (email: string, currentPassword: string, code: string, nextPassword: string) => boolean;
-  withdraw: (password: string) => "ok" | "bad-password" | "guest";
+  withdraw: (input: { password?: string; code?: string }) => "ok" | "bad-password" | "bad-code" | "guest";
   retention: RetentionNote | null;
 };
 
@@ -197,6 +235,68 @@ function isChatNoticeForRoom(notice: Pick<AppNotification, "kind" | "href">, roo
   return notice.kind === "채팅" && chatRoomIdFromHref(notice.href) === roomId;
 }
 
+function blankRoom(product: Product, id: string, user: SparkUser | null): ChatRoom {
+  const seller = getSeller(product.sellerId);
+  return {
+    id,
+    productId: product.id,
+    sellerName: seller.name,
+    sellerHandle: seller.handle,
+    sellerEmail: sellerAccount(product.sellerId).email,
+    buyerName: user?.name,
+    buyerEmail: user?.email,
+    activity: "활성",
+    updatedAt: new Date().toISOString(),
+    unread: 0,
+    listed: false,
+    messages: [],
+  };
+}
+
+function withWireframeAccount(accounts: StoredAccount[]): StoredAccount[] {
+  const email = WIREFRAME_LOGIN.email.toLowerCase();
+  if (accounts.some((item) => item.email.toLowerCase() === email)) return accounts;
+  return [...accounts, { ...WIREFRAME_LOGIN, provider: "email" }];
+}
+
+function maskAccount(number: string) {
+  const tail = number.replace(/\s/g, "").slice(-4);
+  return tail ? `****${tail}` : "****";
+}
+
+function purchaseCard(product: Product): ChatMessage {
+  const price = formatPrice(product.price);
+  return {
+    id: crypto.randomUUID(),
+    sender: "me",
+    kind: "purchase",
+    at: formatTime(),
+    systemKey: "purchaseRequested",
+    systemParams: { title: product.title, price },
+    text: fill(UI.ko.purchaseRequested, { title: product.title, price }),
+  };
+}
+
+function paymentRequestText(
+  product: Product,
+  address: ShippingAddress,
+  account: BankAccount,
+  money: { feeRate: number; payoutAmount: number },
+) {
+  const shipping = product.shippingIncluded || product.shippingFee === 0 ? "포함" : formatPrice(product.shippingFee);
+  const total = product.price + (product.shippingIncluded || product.shippingFee === 0 ? 0 : product.shippingFee);
+  return [
+    "판매자가 구매를 승인했습니다. 아래 내용으로 결제를 진행해 주세요.",
+    `상품: ${product.title}`,
+    `상품 금액: ${formatPrice(product.price)}`,
+    `배송비: ${shipping}`,
+    `결제 금액: ${formatPrice(total)}`,
+    `발송지: ${address.name} · (${address.postalCode}) ${address.address} ${address.detail}`.trim(),
+    `정산 계좌 확인: ${account.bank} · ${account.holder} · ${maskAccount(account.number)}`,
+    `수수료 ${Math.round(money.feeRate * 100)}% · 판매자 정산 예정 ${formatPrice(money.payoutAmount)}`,
+  ].join("\n");
+}
+
 function expireCancelRequests(orders: Order[], now = Date.now()) {
   let changed = false;
   const next = orders.map((order) => {
@@ -214,12 +314,17 @@ function expireCancelRequests(orders: Order[], now = Date.now()) {
   return changed ? next : orders;
 }
 
-export function SparkProvider({ children }: { children: ReactNode }) {
+export function SparkProvider({ children, initialLocale = "ko" }: { children: ReactNode; initialLocale?: LocaleId }) {
   const [user, setUser] = useState<SparkUser | null>(null);
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [accountsReady, setAccountsReady] = useState(false);
-  const [locale, setLocale] = useState<LocaleId>("ko");
-  const [banks, setBanks] = useState<BankAccount[]>([]);
+  const [locale, setLocaleState] = useState<LocaleId>(initialLocale);
+  const setLocale = useCallback((next: LocaleId) => {
+    setLocaleState(next);
+    document.cookie = `${LOCALE_COOKIE}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  }, []);
+  const [tradeRole, setTradeRoleState] = useState<TradeRole>("buyer");
+  const [banks, setBanks] = useState<BankAccount[]>(WIREFRAME_BANKS);
   const [notifications, setNotifications] = useState<AppNotification[]>(SEED_NOTIFICATIONS);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(() => seedNotificationSettings());
   const [retention, setRetention] = useState<RetentionNote | null>(null);
@@ -232,15 +337,33 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       return { ...product, deletedAt: hit?.deletedAt ?? null, hardDeleteAt: hit?.hardDeleteAt ?? null };
     });
   });
-  const [addresses, setAddresses] = useState<ShippingAddress[]>([]);
+  const [addresses, setAddresses] = useState<ShippingAddress[]>(WIREFRAME_ADDRESSES);
   const [orders, setOrders] = useState<Order[]>(ORDERS);
-  const [rooms, setRooms] = useState<ChatRoom[]>(CHAT_ROOMS);
+  const [rooms, setRooms] = useState<ChatRoom[]>(() => cloneChatRooms(CHAT_ROOMS));
   const [typingRoomId, setTypingRoomId] = useState<string | null>(null);
   const [activeChatRoomId, setActiveChatRoomIdState] = useState<string | null>(null);
   const activeChatRoomIdRef = useRef<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
   const replyCursor = useRef(0);
+
+  const setTradeRole = useCallback((role: TradeRole) => {
+    setTradeRoleState(role);
+    try {
+      window.sessionStorage.setItem(ROLE_STORAGE_KEY, role);
+    } catch (error) {
+      console.error("[Spark] 거래 롤을 저장하지 못했어요.", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(ROLE_STORAGE_KEY);
+      if (saved === "buyer" || saved === "seller") setTradeRoleState(saved);
+    } catch (error) {
+      console.error("[Spark] 거래 롤을 읽지 못했어요.", error);
+    }
+  }, []);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -330,9 +453,19 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setAccounts(readStoredAccounts());
+    const storedAccounts = withWireframeAccount(readStoredAccounts());
+    setAccounts(storedAccounts);
     const stored = readStoredAuth();
-    if (stored) setUser(stored.user);
+    if (stored) {
+      const account = storedAccounts.find((item) => item.email === stored.user.email && !item.withdrawn);
+      const nextUser = account ? sessionUserFromAccount(stored.user, account) : stored.user;
+      try {
+        replaceStoredUser(nextUser);
+      } catch (error) {
+        console.error("[Spark] 저장된 회원 정보를 세션에 맞추지 못했어요.", error);
+      }
+      setUser(nextUser);
+    }
     setAccountsReady(true);
   }, []);
 
@@ -418,7 +551,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   const updateProduct = useCallback(
     (id: string, patch: Partial<Product>) => {
       const current = records.find((product) => product.id === id);
-      if (!current || current.deletedAt || current.saleStatus === "판매완료") return false;
+      if (!current || current.deletedAt) return false;
       if (patch.price !== undefined && patch.price < current.price && wishlistIds.includes(id)) {
         pushNotice({ kind: "가격하락", text: `${current.title} 가격이 내려갔어요.`, href: `/products/${id}` });
       }
@@ -435,10 +568,18 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   );
 
   const softDeleteProduct = useCallback((id: string) => {
+    const product = records.find((item) => item.id === id);
+    if (!product || product.deletedAt) return false;
+    const block = productDeleteBlock(product, rooms, orders);
+    if (block) {
+      notify(block);
+      return false;
+    }
     const deletedAt = new Date().toISOString();
     const hardDeleteAt = hardDeleteAtFrom(deletedAt);
     setRecords((current) => current.map((item) => (item.id === id ? { ...item, deletedAt, hardDeleteAt: item.hardDeleteAt ?? hardDeleteAt } : item)));
-  }, []);
+    return true;
+  }, [notify, orders, records, rooms]);
 
   const addAddress = useCallback((draft: AddressDraft) => {
     if (addresses.length >= ADDRESS_LIMIT) return "limit" as const;
@@ -547,74 +688,32 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       notify("활동 정지 중에는 채팅방을 만들 수 없어요.");
       return null;
     }
-    const seller = getSeller(product.sellerId);
     const existing = rooms.find((room) => room.productId === product.id);
     if (existing) return existing.id;
 
     const id = `room-${product.id}`;
-    const room: ChatRoom = {
-      id,
-      productId: product.id,
-      sellerName: seller.name,
-      sellerHandle: seller.handle,
-      sellerEmail: sellerAccount(product.sellerId).email,
-      buyerName: user?.name,
-      buyerEmail: user?.email,
-      activity: "활성",
-      updatedAt: new Date().toISOString(),
-      unread: 0,
-      messages: [
-        {
-          id: `hello-${id}`,
-          sender: "seller",
-          text: `안녕하세요. ${product.title} 보고 오셨어요? 궁금한 점 편하게 남겨 주세요.`,
-          at: formatTime(),
-        },
-      ],
-    };
+    const room = blankRoom(product, id, user);
     setRooms((current) => (current.some((item) => item.productId === product.id) ? current : [room, ...current]));
     return id;
   }, [notify, rooms, user]);
 
   const startPurchase = useCallback((product: Product) => {
+    if (tradeRole !== "buyer") {
+      notify("구매자 롤로 전환한 뒤 구매신청할 수 있어요.");
+      return null;
+    }
     const until = user ? getShared().suspendedUntil[user.email] ?? getShared().suspendedUntil[user.name] : undefined;
     if (until && new Date(until).getTime() > Date.now()) {
       notify("활동 정지 중에는 채팅방을 만들 수 없어요.");
       return null;
     }
-    if (product.sellerId === "me") {
-      notify("내 상품에는 구매 신청을 보낼 수 없어요.");
-      return null;
-    }
-    const seller = getSeller(product.sellerId);
     const roomId = rooms.find((room) => room.productId === product.id)?.id ?? `room-${product.id}`;
     if (product.saleStatus !== "판매중") {
-      setRooms((current) => {
-        if (current.some((item) => item.productId === product.id)) return current;
-        return [{
-          id: roomId,
-          productId: product.id,
-          sellerName: seller.name,
-          sellerHandle: seller.handle,
-          sellerEmail: sellerAccount(product.sellerId).email,
-          buyerName: user?.name,
-          buyerEmail: user?.email,
-          activity: "활성" as const,
-          updatedAt: new Date().toISOString(),
-          unread: 0,
-          messages: [{ id: `hello-${roomId}`, sender: "seller" as const, text: `안녕하세요. ${product.title} 보고 오셨어요? 궁금한 점 편하게 남겨 주세요.`, at: formatTime() }],
-        }, ...current];
-      });
-      notify("판매중인 상품만 구매 신청할 수 있어요. 채팅방만 열었습니다.");
+      setRooms((current) => (current.some((item) => item.productId === product.id) ? current : [blankRoom(product, roomId, user), ...current]));
+      notify("판매중인 상품만 구매 신청할 수 있어요.");
       return roomId;
     }
-    const card: ChatMessage = {
-      id: crypto.randomUUID(),
-      sender: "me",
-      kind: "purchase",
-      at: formatTime(),
-      text: `${product.title} · ${formatPrice(product.price)} 구매를 신청합니다. 수락해 주세요.`,
-    };
+    const card = purchaseCard(product);
     let already = false;
     setRooms((current) => {
       const existing = current.find((item) => item.productId === product.id);
@@ -625,33 +724,64 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       if (existing) {
         return current.map((item) =>
           item.id === existing.id
-            ? { ...item, messages: [...item.messages, card], purchase: { status: "대기" as const, requestedAt: new Date().toISOString() } }
+            ? {
+                ...item,
+                listed: true,
+                updatedAt: new Date().toISOString(),
+                messages: [...item.messages, card],
+                purchase: { status: "대기" as const, requestedAt: new Date().toISOString() },
+              }
             : item,
         );
       }
       return [{
-        id: roomId,
-        productId: product.id,
-        sellerName: seller.name,
-        sellerHandle: seller.handle,
-        sellerEmail: sellerAccount(product.sellerId).email,
-        buyerName: user?.name,
-        buyerEmail: user?.email,
-        activity: "활성" as const,
-        updatedAt: new Date().toISOString(),
-        unread: 0,
+        ...blankRoom(product, roomId, user),
+        listed: true,
         purchase: { status: "대기" as const, requestedAt: new Date().toISOString() },
-        messages: [
-          { id: `hello-${roomId}`, sender: "seller" as const, text: `안녕하세요. ${product.title} 보고 오셨어요? 궁금한 점 편하게 남겨 주세요.`, at: formatTime() },
-          card,
-        ],
+        messages: [card],
       }, ...current];
     });
-    notify(already ? "이미 진행 중인 구매 신청이 있어요." : "채팅을 열고 판매자에게 수락 요청을 보냈어요.");
+    notify(already ? "이미 진행 중인 구매 신청이 있어요." : UI[locale].requestSent);
     return roomId;
-  }, [notify, rooms, user]);
+  }, [locale, notify, rooms, tradeRole, user]);
 
-  const sendMessage = useCallback((roomId: string, message: Pick<ChatMessage, "text" | "imageUrl"> & { sender?: ChatMessage["sender"] }) => {
+  const requestPurchase = useCallback((roomId: string) => {
+    if (tradeRole !== "buyer") {
+      notify("구매자 롤로 전환한 뒤 구매신청할 수 있어요.");
+      return;
+    }
+    const room = rooms.find((item) => item.id === roomId);
+    const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
+    if (!room || !product) {
+      notify("채팅방의 상품을 찾을 수 없어요.");
+      return;
+    }
+    if (product.saleStatus !== "판매중") {
+      notify("판매중인 상품만 구매 신청할 수 있어요.");
+      return;
+    }
+    if (room.purchase && ["대기", "승인", "결제완료"].includes(room.purchase.status)) {
+      notify("이미 진행 중인 구매 신청이 있어요.");
+      return;
+    }
+    const card = purchaseCard(product);
+    setRooms((current) =>
+      current.map((item) =>
+        item.id === roomId
+          ? {
+              ...item,
+              listed: true,
+              updatedAt: new Date().toISOString(),
+              messages: [...item.messages, card],
+              purchase: { status: "대기" as const, requestedAt: new Date().toISOString() },
+            }
+          : item,
+      ),
+    );
+    notify(UI[locale].requestSent);
+  }, [locale, notify, records, rooms, tradeRole]);
+
+  const sendMessage = useCallback((roomId: string, message: Pick<ChatMessage, "text" | "imageUrl" | "langLabel" | "originalText"> & { sender?: ChatMessage["sender"] }) => {
     const now = Date.now();
     if (now < chatPausedUntil) {
       notify("메시지를 너무 빠르게 보내 10초 동안 전송이 멈춰 있어요.");
@@ -664,23 +794,24 @@ export function SparkProvider({ children }: { children: ReactNode }) {
       return;
     }
     const sender = message.sender ?? "me";
-    const room = rooms.find((item) => item.id === roomId);
-    const listing = room ? records.find((item) => item.id === room.productId) : undefined;
-    const viewerIsSeller = listing?.sellerId === "me";
+    const viewerIsSeller = tradeRole === "seller";
     const warned = Boolean(message.text && /계좌|카톡|카카오|010-?\d|개인정보|외부결제/.test(message.text));
+    const source = message.originalText ?? message.text;
     const mine: ChatMessage = {
       id: crypto.randomUUID(),
       sender,
       at: formatTime(),
       text: message.text,
+      originalText: source,
+      langLabel: message.langLabel,
       imageUrl: message.imageUrl,
     };
     const warning: ChatMessage | null = warned
-      ? { id: crypto.randomUUID(), sender: "system", at: formatTime(), text: "외부결제나 개인정보 전송은 경고 1회가 누적됩니다. Spark 안전결제를 이용해 주세요." }
+      ? { id: crypto.randomUUID(), sender: "system", at: formatTime(), systemKey: "externalPayWarning", text: UI.ko.externalPayWarning }
       : null;
     setRooms((current) =>
       current.map((room) =>
-        room.id === roomId ? { ...room, updatedAt: new Date().toISOString(), messages: [...room.messages, ...(warning ? [warning] : []), mine] } : room,
+        room.id === roomId ? { ...room, listed: true, updatedAt: new Date().toISOString(), messages: [...room.messages, ...(warning ? [warning] : []), mine] } : room,
       ),
     );
     if (viewerIsSeller || sender !== "me") return;
@@ -711,50 +842,90 @@ export function SparkProvider({ children }: { children: ReactNode }) {
         href: `/chat/${roomId}`,
       });
     }, 900);
-  }, [chatPausedUntil, notify, pushNotice, records, rooms]);
+  }, [chatPausedUntil, notify, pushNotice, rooms, tradeRole]);
 
-  const decidePurchase = useCallback((roomId: string, accept: boolean) => {
+  const decidePurchase = useCallback((roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => {
+    if (tradeRole !== "seller") {
+      notify(UI[locale].sellerRoleNeed);
+      return;
+    }
     const room = rooms.find((item) => item.id === roomId);
     const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
     if (!room || !product || room.purchase?.status !== "대기") return;
-    const vip = Boolean(user?.membership === "vip" && product.sellerId === "me");
+    const address = addresses.find((item) => item.id === settlement?.addressId);
+    const account = banks.find((item) => item.id === settlement?.accountId);
+    if (accept && (!address || !account)) {
+      notify(UI[locale].settlementNeed);
+      return;
+    }
+    const vip = Boolean(user?.membership === "vip");
     const money = settlementOf(product.price, vip);
-    const note: ChatMessage = accept
+    const shippingIncluded = product.shippingIncluded || product.shippingFee === 0;
+    const total = product.price + (shippingIncluded ? 0 : product.shippingFee);
+    const note: ChatMessage = accept && address && account
       ? {
           id: crypto.randomUUID(),
           sender: "system",
           kind: "payment",
           at: formatTime(),
-          text: "판매자가 구매를 수락했습니다. 결제를 진행해 주세요.",
+          systemKey: "paymentRequest",
+          systemParams: {
+            title: product.title,
+            price: formatPrice(product.price),
+            shippingIncluded: shippingIncluded ? "1" : "0",
+            shippingFee: formatPrice(product.shippingFee),
+            total: formatPrice(total),
+            origin: `${address.name} · (${address.postalCode}) ${address.address} ${address.detail}`.trim(),
+            account: `${account.bank} · ${account.holder} · ${maskAccount(account.number)}`,
+            feePercent: String(Math.round(money.feeRate * 100)),
+            payout: formatPrice(money.payoutAmount),
+          },
+          text: paymentRequestText(product, address, account, money),
         }
       : {
           id: crypto.randomUUID(),
           sender: "system",
           at: formatTime(),
-          text: "판매자가 구매 신청을 거절했습니다. 상품은 판매중으로 유지됩니다.",
+          systemKey: "purchaseRejected",
+          text: UI.ko.purchaseRejected,
         };
     setRooms((current) =>
       current.map((item) =>
         item.id === roomId
           ? {
               ...item,
+              listed: true,
               messages: [...item.messages, note],
-              purchase: accept
-                ? { status: "승인", requestedAt: item.purchase?.requestedAt ?? new Date().toISOString(), feeRate: money.feeRate, payout: money.payoutAmount }
+              purchase: accept && address && account
+                ? {
+                    status: "승인",
+                    requestedAt: item.purchase?.requestedAt ?? new Date().toISOString(),
+                    feeRate: money.feeRate,
+                    payout: money.payoutAmount,
+                    sellerAddress: `${address.address} ${address.detail}`.trim(),
+                    sellerAccount: `${account.bank} ${maskAccount(account.number)}`,
+                  }
                 : { status: "거절", requestedAt: item.purchase?.requestedAt ?? new Date().toISOString() },
             }
           : item,
       ),
     );
-    notify(accept ? "구매를 수락했어요. 구매자 채팅에 결제하기 안내를 보냈습니다." : "구매 신청을 거절했어요. 상품은 판매중으로 유지됩니다.");
-  }, [notify, records, rooms, user?.membership]);
+    setRecords((current) =>
+      current.map((item) => {
+        if (item.id !== product.id) return item;
+        if (accept) return { ...item, saleStatus: "예약중" };
+        return item.saleStatus === "예약중" ? { ...item, saleStatus: "판매중" } : item;
+      }),
+    );
+    notify(accept ? UI[locale].payRequestSent : UI[locale].payRejectedToast);
+  }, [addresses, banks, locale, notify, records, rooms, tradeRole, user?.membership]);
 
   const completePurchase = useCallback((roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => {
     const room = rooms.find((item) => item.id === roomId);
     const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
     if (!room || !product || room.purchase?.status !== "승인") return null;
-    if (product.sellerId === "me") {
-      notify("판매자는 이 채팅에서 결제할 수 없어요.");
+    if (tradeRole !== "buyer") {
+      notify(UI[locale].buyerRoleNeed);
       return null;
     }
     const vip = product.sellerId === "me" && user?.membership === "vip";
@@ -797,9 +968,11 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     );
     const note: ChatMessage = {
       id: crypto.randomUUID(),
-      sender: "me",
+      sender: "system",
+      kind: "payment",
       at: formatTime(),
-      text: "결제가 완료되어 PG사에 예치되었습니다. 상품 금액과 수수료율이 이 시점에 고정됩니다.",
+      systemKey: "paymentDone",
+      text: UI.ko.paymentDone,
     };
     setRooms((current) =>
       current.map((item) =>
@@ -808,14 +981,14 @@ export function SparkProvider({ children }: { children: ReactNode }) {
           : item,
       ),
     );
-    notify("결제가 완료되어 예치되었어요. 상품은 예약중이 되었습니다.");
+    notify(UI[locale].payDoneToast);
     pushNotice({
       kind: "거래",
       text: `${product.title} 상품 결제가 완료되었습니다.`,
       href: `/orders/${orderId}-B`,
     });
     return orderId;
-  }, [notify, pushNotice, records, rooms, user?.email, user?.membership, user?.name]);
+  }, [locale, notify, pushNotice, records, rooms, tradeRole, user?.email, user?.membership, user?.name]);
 
   const markRead = useCallback((roomId: string) => {
     setRooms((current) => {
@@ -826,8 +999,13 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const leaveRoom = useCallback((roomId: string) => {
-    setRooms((current) => current.filter((room) => room.id !== roomId));
-    notify("채팅방에서 나갔어요.");
+    setRooms((current) => dropRoom(current, roomId));
+    notify(UI[locale].chatLeft);
+  }, [locale, notify]);
+
+  const deleteRoom = useCallback((roomId: string) => {
+    setRooms((current) => dropRoom(current, roomId));
+    notify("이 채팅방만 삭제했어요. 다른 대화는 그대로예요.");
   }, [notify]);
 
   const addBank = useCallback((draft: Omit<BankAccount, "id">) => {
@@ -846,12 +1024,29 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateProfile = useCallback((patch: { name?: string; photoUrl?: string }) => {
-    if (!user) return;
+    if (!user) return false;
     const next = { ...user, ...patch };
+    const nextAccounts = accounts.map((account) =>
+      account.email === user.email ? { ...account, name: next.name, photoUrl: next.photoUrl } : account,
+    );
+    try {
+      replaceStoredUser(next);
+      window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(nextAccounts));
+    } catch (error) {
+      console.error("[Spark] 회원 정보를 세션에 저장하지 못했어요.", error);
+      return false;
+    }
     setUser(next);
-    setAccounts((current) => current.map((account) => (account.email === user.email ? { ...account, name: next.name, photoUrl: next.photoUrl } : account)));
-    notify("프로필을 저장했어요.");
-  }, [notify, user]);
+    setAccounts(nextAccounts);
+    notify("회원 정보를 수정했어요.");
+    return true;
+  }, [accounts, notify, user]);
+
+  const confirmPassword = useCallback((email: string, password: string) => {
+    if (!password) return false;
+    const found = accounts.find((account) => account.email === email && account.provider === "email" && !account.withdrawn);
+    return Boolean(found && found.password === password);
+  }, [accounts]);
 
   const requestResetCode = useCallback((email: string) => {
     const found = accounts.some((account) => account.email === email && !account.withdrawn);
@@ -873,16 +1068,24 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     if (code !== TEST_VERIFICATION_CODE) return false;
     const found = accounts.find((account) => account.email === email && account.password === currentPassword && !account.withdrawn);
     if (!found) return false;
-    setAccounts((current) => current.map((account) => (account.email === email ? { ...account, password: nextPassword } : account)));
+    const nextAccounts = accounts.map((account) => (account.email === email ? { ...account, password: nextPassword } : account));
+    try {
+      window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(nextAccounts));
+    } catch (error) {
+      console.error("[Spark] 비밀번호를 저장하지 못했어요.", error);
+      return false;
+    }
+    setAccounts(nextAccounts);
     notify("비밀번호를 바꿨어요.");
     return true;
   }, [accounts, notify]);
 
-  const withdraw = useCallback((password: string) => {
+  const withdraw = useCallback((input: { password?: string; code?: string }) => {
     if (!user) return "guest" as const;
-    const account = accounts.find((item) => item.email === user.email);
-    const confirmed = account?.provider === "email" ? account.password === password : password === user.email;
-    if (!confirmed) return "bad-password" as const;
+    const account = accounts.find((item) => item.email === user.email && !item.withdrawn);
+    if (!account) return "guest" as const;
+    if (account.provider === "email" && (!input.password || account.password !== input.password)) return "bad-password" as const;
+    if (input.code !== TEST_VERIFICATION_CODE) return "bad-code" as const;
     const hasTrades = orders.some((order) => order.ownerEmail === user.email);
     const retainUntil = hasTrades ? new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : null;
     setAccounts((current) =>
@@ -919,9 +1122,10 @@ export function SparkProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     for (const id of shared.deletedProductIds) {
       const product = records.find((item) => item.id === id);
-      if (product && !product.deletedAt && product.saleStatus !== "예약중") softDeleteProduct(id);
+      if (!product || product.deletedAt || productDeleteBlock(product, rooms, orders)) continue;
+      softDeleteProduct(id);
     }
-  }, [records, shared.deletedProductIds, softDeleteProduct]);
+  }, [orders, records, rooms, shared.deletedProductIds, softDeleteProduct]);
 
   const value: SparkContextValue = {
     user,
@@ -952,13 +1156,17 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     typingRoomId,
     activeChatRoomId,
     setActiveChatRoomId,
+    tradeRole,
+    setTradeRole,
     ensureRoom,
     startPurchase,
+    requestPurchase,
     sendMessage,
     decidePurchase,
     completePurchase,
     markRead,
     leaveRoom,
+    deleteRoom,
     notify,
     locale,
     setLocale,
@@ -973,6 +1181,7 @@ export function SparkProvider({ children }: { children: ReactNode }) {
     notificationSettings,
     setNotificationEnabled,
     updateProfile,
+    confirmPassword,
     requestResetCode,
     resetPassword,
     changePassword,

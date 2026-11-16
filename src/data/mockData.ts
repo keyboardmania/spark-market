@@ -201,6 +201,19 @@ export function representativeImage(media: ProductMedia[]) {
   return orderMedia(media).find((item) => item.thumbnailed) ?? null;
 }
 
+export function relocateListingImage(media: ProductMedia[], sourceId: string, targetId: string) {
+  const ordered = orderMedia(media);
+  if (sourceId === targetId) return ordered;
+  const source = ordered.find((item) => item.id === sourceId);
+  const target = ordered.find((item) => item.id === targetId);
+  if (!source || source.kind !== "image" || !target) return ordered;
+  const rest = ordered.filter((item) => item.id !== sourceId);
+  const insertAt = target.thumbnailed ? 0 : Math.max(0, rest.findIndex((item) => item.id === targetId));
+  const next = [...rest];
+  next.splice(insertAt, 0, { ...source, thumbnailed: false });
+  return orderMedia(next.map((item, index) => ({ ...item, displayOrder: index, thumbnailed: false })));
+}
+
 export function detectKeywordFromImage(fileName: string, fileUrl = "") {
   const source = `${fileName} ${fileUrl}`;
   for (const rule of KEYWORD_RULES) {
@@ -224,6 +237,46 @@ export function quoteForKeyword(keyword: AiKeyword) {
   };
 }
 
+const KEYWORD_CATEGORY: Record<AiKeyword, Category> = {
+  피규어: "피규어/프라모델",
+  프라모델: "피규어/프라모델",
+  TCG: "TCG",
+  레고: "레고",
+  아트토이: "아트토이",
+  인형: "인형",
+  스퀴시: "스퀴시/피젯토이",
+};
+
+const RELATED_KEYWORDS: Record<AiKeyword, readonly [AiKeyword, AiKeyword]> = {
+  피규어: ["프라모델", "아트토이"],
+  프라모델: ["피규어", "레고"],
+  TCG: ["피규어", "아트토이"],
+  레고: ["프라모델", "피규어"],
+  아트토이: ["피규어", "인형"],
+  인형: ["스퀴시", "아트토이"],
+  스퀴시: ["인형", "아트토이"],
+};
+
+export type ListingAnalysis = {
+  keyword: AiKeyword;
+  keywords: AiKeyword[];
+  recommendedPrice: number;
+  sampleSize: number;
+  category: Category;
+};
+
+export function analyzeListingImage(fileName: string, fileUrl = ""): ListingAnalysis {
+  const keyword = detectKeywordFromImage(fileName, fileUrl);
+  const quote = quoteForKeyword(keyword);
+  return {
+    keyword,
+    keywords: [keyword, ...RELATED_KEYWORDS[keyword]],
+    recommendedPrice: Math.max(0, Math.round(quote.average)),
+    sampleSize: quote.sampleSize,
+    category: KEYWORD_CATEGORY[keyword],
+  };
+}
+
 const NICKNAME_PREFIXES = ["컬렉터", "Spark", "수집가", "선반"] as const;
 
 export function createNickname() {
@@ -238,11 +291,14 @@ export type ChatMessage = {
   text?: string;
   originalText?: string;
   translatedText?: string;
+  langLabel?: string;
   imageUrl?: string;
   videoUrl?: string;
   at: string;
   sentAt?: string;
   kind?: "purchase" | "payment";
+  systemKey?: "paymentRequest" | "paymentDone" | "purchaseRejected" | "purchaseRequested" | "externalPayWarning" | "paymentPrompt";
+  systemParams?: Record<string, string>;
 };
 
 export type PurchaseStatus = "대기" | "거절" | "승인" | "결제완료";
@@ -271,6 +327,8 @@ export type ChatRoom = {
   sellerEmail?: string;
   activity?: ChatActivity;
   updatedAt?: string;
+  /** False until someone sends a real message. Drafts stay out of the inbox. */
+  listed?: boolean;
 };
 
 export const ORDER_STATUSES = ["결제완료", "배송중", "배송완료", "구매확정", "거래취소"] as const;
@@ -1390,6 +1448,22 @@ export const CHAT_ROOMS: ChatRoom[] = [
         text: "택배는 우체국이고, 완충재 이중으로 포장합니다.",
         at: "오후 7:45",
       },
+      {
+        id: "m-hinata-ja",
+        sender: "seller",
+        langLabel: "日本語",
+        originalText: "箱の角に傷はありますか？明日まで取り置きできますか。",
+        text: "箱の角に傷はありますか？明日まで取り置きできますか。",
+        at: "오후 7:46",
+      },
+      {
+        id: "m-hinata-de",
+        sender: "seller",
+        langLabel: "Deutsch",
+        originalText: "Ist die Figur originalverpackt? Ich würde sie sofort kaufen.",
+        text: "Ist die Figur originalverpackt? Ich würde sie sofort kaufen.",
+        at: "오후 7:47",
+      },
     ],
   },
   {
@@ -1464,6 +1538,7 @@ export const CHAT_ROOMS: ChatRoom[] = [
         id: "m6c",
         sender: "system",
         kind: "payment",
+        systemKey: "paymentPrompt",
         text: "판매자가 구매를 수락했습니다. 결제를 진행해 주세요.",
         at: "오후 6:31",
       },
@@ -1492,6 +1567,30 @@ export const CHAT_ROOMS: ChatRoom[] = [
         sender: "seller",
         text: "맞아요. 시크릿 확정 태그이고 비닐도 안 열었어요.",
         at: "오후 8:05",
+      },
+      {
+        id: "m-chii-zh",
+        sender: "seller",
+        langLabel: "中文",
+        originalText: "这个还在出售吗？运费包含在价格里吗？",
+        text: "这个还在出售吗？运费包含在价格里吗？",
+        at: "오후 8:06",
+      },
+      {
+        id: "m-chii-en",
+        sender: "me",
+        langLabel: "English",
+        originalText: "Is the box still sealed? I can pay today.",
+        text: "Is the box still sealed? I can pay today.",
+        at: "오후 8:07",
+      },
+      {
+        id: "m-chii-cs",
+        sender: "seller",
+        langLabel: "Čeština",
+        originalText: "Je tahle karta v pořádku? Můžu zaplatit kartou.",
+        text: "Je tahle karta v pořádku? Můžu zaplatit kartou.",
+        at: "오후 8:08",
       },
     ],
   },
@@ -1962,6 +2061,7 @@ export type AdminInquiry = {
   id: string;
   member: string;
   email: string;
+  category: "배송" | "결제" | "상품" | "회원" | "기타";
   subject: string;
   body: string;
   createdAt: string;
@@ -1974,6 +2074,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
     id: "inq-331",
     member: "김서연",
     email: "seoyeon@spark.market",
+    category: "배송",
     subject: "리자몽 카드 배송이 아직 출발 전이에요",
     body: "어제 결제했는데 판매자 운송장 안내가 없어요. 확인 부탁드려요.",
     createdAt: "2026.10.27 14:20",
@@ -1984,6 +2085,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
     id: "inq-328",
     member: "박민지",
     email: "minji@spark.market",
+    category: "회원",
     subject: "성인 인증 번호가 오지 않아요",
     body: "회원가입 중 인증번호 받기를 눌렀는데 문자가 안 옵니다.",
     createdAt: "2026.10.27 11:05",
@@ -1994,6 +2096,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
     id: "inq-301",
     member: "치이",
     email: "chii.pocket@spark.market",
+    category: "결제",
     subject: "정산 계좌를 바꾸고 싶어요",
     body: "부산은행 계좌로 변경 요청합니다. 통장 사본은 메일로 보냈어요.",
     createdAt: "2026.10.22 16:40",

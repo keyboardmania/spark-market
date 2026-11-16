@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ADMIN_MEMBERS, ADMIN_TRADES, formatPrice, formatRetentionDate, getProductById, type Review } from "@/data/mockData";
 import { fieldClass } from "@/components/spark/styles";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { useShared } from "@/data/shared";
+import { removeReview, useShared } from "@/data/shared";
 
 const RATINGS = [1, 2, 3, 4, 5] as const;
 
@@ -15,6 +15,7 @@ export function ReviewsAdmin() {
   const [sort, setSort] = useState<"desc" | "asc">("desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const shown = reviews
+    .filter((review) => !review.deletedAt)
     .filter((review) => {
       const needle = query.trim().toLowerCase();
       const author = reviewAuthor(review);
@@ -26,7 +27,12 @@ export function ReviewsAdmin() {
     })
     .slice()
     .sort((a, b) => (sort === "desc" ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
-  const selected = reviews.find((review) => review.id === selectedId) ?? null;
+  const selected = shown.find((review) => review.id === selectedId) ?? null;
+
+  function deleteReview(id: string) {
+    removeReview(id);
+    setSelectedId((current) => (current === id ? null : current));
+  }
 
   return (
     <div className="space-y-6">
@@ -52,7 +58,7 @@ export function ReviewsAdmin() {
           {sort === "desc" ? "작성일 최신순" : "작성일 과거순"}
         </button>
       </FilterBar>
-      <Panel title="전체 리뷰" description={`${shown.length}건 표시 · 삭제된 리뷰도 소프트 딜리트 상태로 남아 있어요.`} flush>
+      <Panel title="전체 리뷰" description={`${shown.length}건 표시 · 삭제하면 목록과 상태에서 바로 빠집니다.`} flush>
         <DataTable>
           <thead>
             <tr>
@@ -61,7 +67,7 @@ export function ReviewsAdmin() {
               <th className={thClass}>별점</th>
               <th className={thClass}>작성일</th>
               <th className={thClass}>상태</th>
-              <th className={thClass}>상세</th>
+              <th className={thClass}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -77,19 +83,31 @@ export function ReviewsAdmin() {
                   <td className={tdClass}>{"★".repeat(review.rating)}</td>
                   <td className={`${tdClass} tabular-nums`}>{review.createdAt}</td>
                   <td className={tdClass}>
-                    <StatusPill tone={review.deletedAt ? "slate" : "emerald"}>{review.deletedAt ? "삭제됨" : "게시중"}</StatusPill>
+                    <StatusPill tone="emerald">게시중</StatusPill>
                   </td>
                   <td className={tdClass}>
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedId(review.id);
-                      }}
-                    >
-                      상세
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedId(review.id);
+                        }}
+                      >
+                        상세
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-rose-200 px-3 py-1.5 text-xs text-rose-600"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteReview(review.id);
+                        }}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -104,12 +122,12 @@ export function ReviewsAdmin() {
           </tbody>
         </DataTable>
       </Panel>
-      {selected ? <ReviewDetail review={selected} onClose={() => setSelectedId(null)} /> : null}
+      {selected ? <ReviewDetail review={selected} onClose={() => setSelectedId(null)} onDelete={deleteReview} /> : null}
     </div>
   );
 }
 
-function ReviewDetail({ review, onClose }: { review: Review; onClose: () => void }) {
+function ReviewDetail({ review, onClose, onDelete }: { review: Review; onClose: () => void; onDelete: (id: string) => void }) {
   const close = useMemo(() => onClose, [onClose]);
   const product = getProductById(review.productId);
   const trade = ADMIN_TRADES.find((item) => item.id === review.orderId);
@@ -141,6 +159,11 @@ function ReviewDetail({ review, onClose }: { review: Review; onClose: () => void
         ) : (
           <p className="mt-2 text-sm text-slate-500">첨부된 미디어가 없어요.</p>
         )}
+      </div>
+      <div className="mt-5 flex justify-end">
+        <button type="button" className="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700" onClick={() => onDelete(review.id)}>
+          리뷰 삭제
+        </button>
       </div>
     </DetailModal>
   );

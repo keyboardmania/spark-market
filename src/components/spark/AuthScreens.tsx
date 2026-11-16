@@ -6,15 +6,17 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { TEST_VERIFICATION_CODE, createNickname, type SparkUser } from "@/data/mockData";
-
-const LOGIN_ERROR = "이메일 또는 비밀번호가 올바르지 않습니다.";
-const VERIFICATION_SENT = "인증번호가 발송되었습니다. (테스트 번호: 5825)";
+import { translate } from "@/i18n";
+import { useI18n } from "@/features/i18n/useI18n";
+import { fill } from "@/features/i18n/ui";
+import { QuickFill } from "@/features/wireframe/QuickFill";
+import { WIREFRAME_LOGIN } from "@/features/wireframe/demoProfile";
 
 const SOCIAL_PROVIDERS = [
-  { id: "line" as const, label: "LINE으로 계속하기", name: "LINE", className: "bg-[#06C755] text-white", mark: "L" },
-  { id: "google" as const, label: "Google로 계속하기", name: "Google", className: "border border-slate-200 bg-white text-slate-900", mark: "G" },
-  { id: "x" as const, label: "X로 계속하기", name: "X", className: "bg-black text-white", mark: "𝕏" },
-  { id: "apple" as const, label: "Apple로 계속하기", name: "Apple", className: "bg-slate-900 text-white", mark: "" },
+  { id: "line" as const, label: "socialLine" as const, name: "LINE", className: "bg-[#06C755] text-white", mark: "L" },
+  { id: "google" as const, label: "socialGoogle" as const, name: "Google", className: "border border-slate-200 bg-white text-slate-900", mark: "G" },
+  { id: "x" as const, label: "socialX" as const, name: "X", className: "bg-black text-white", mark: "𝕏" },
+  { id: "apple" as const, label: "socialApple" as const, name: "Apple", className: "bg-slate-900 text-white", mark: "" },
 ];
 
 type SocialProviderId = (typeof SOCIAL_PROVIDERS)[number]["id"];
@@ -24,19 +26,20 @@ function isEmailShape(email: string) {
 }
 
 export function passwordIssue(password: string) {
-  if (password.length < 10 || password.length > 20) return "비밀번호는 10~20자로 입력해 주세요.";
-  if (/[^A-Za-z0-9!~*^-]/.test(password)) return "특수기호는 ! ~ - * ^ 만 사용할 수 있어요.";
+  if (password.length < 10 || password.length > 20) return "passLength" as const;
+  if (/[^A-Za-z0-9!~*^-]/.test(password)) return "passSymbol" as const;
   let kinds = 0;
   if (/[0-9]/.test(password)) kinds += 1;
   if (/[A-Z]/.test(password)) kinds += 1;
   if (/[a-z]/.test(password)) kinds += 1;
   if (/[!~*^-]/.test(password)) kinds += 1;
-  if (kinds < 3) return "숫자, 대문자, 소문자, 특수기호(! ~ - * ^) 중 3종류 이상을 조합해 주세요.";
+  if (kinds < 3) return "passKinds" as const;
   return null;
 }
 
 export function LoginScreen() {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const { login, authenticate, findAccount, notify } = useSpark();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,12 +48,12 @@ export function LoginScreen() {
   function enter(user: SparkUser) {
     const existing = findAccount(user.email);
     if (!existing || existing.provider !== user.provider) {
-      setError(LOGIN_ERROR);
+      setError(t("loginError"));
       return;
     }
     setError(null);
     login(existing);
-    notify(`${existing.name}님, 어서 오세요.`);
+    notify(fill(t("loginHello"), { name: existing.name }));
     router.push("/");
   }
 
@@ -58,21 +61,23 @@ export function LoginScreen() {
     event.preventDefault();
     const user = authenticate(email, password);
     if (!user) {
-      setError(LOGIN_ERROR);
+      setError(t("loginError"));
       return;
     }
     setError(null);
     login(user);
-    notify(`${user.name}님, 어서 오세요.`);
+    notify(fill(t("loginHello"), { name: user.name }));
     router.push("/");
   }
 
   return (
-    <AuthShell title="다시 만나서 반가워요" subtitle="소셜 계정 또는 이메일로 들어올 수 있어요.">
-      <SocialRow onPick={enter} />
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
+    <AuthShell title={t("loginTitle")} subtitle={t("loginSubtitle")}>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="flex justify-end">
+          <QuickFill onFill={() => { setEmail(WIREFRAME_LOGIN.email); setPassword(WIREFRAME_LOGIN.password); setError(null); }} />
+        </div>
         <label className="block space-y-2">
-          <span className="text-xs text-slate-500">이메일</span>
+          <span className="text-xs text-slate-500">{t("loginEmail")}</span>
           <input
             type="email"
             autoComplete="email"
@@ -83,37 +88,43 @@ export function LoginScreen() {
           />
         </label>
         <label className="block space-y-2">
-          <span className="text-xs text-slate-500">비밀번호</span>
+          <span className="text-xs text-slate-500">{t("loginPassword")}</span>
           <input
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="비밀번호"
+            placeholder={t("loginPasswordPh")}
             className={fieldClass}
           />
         </label>
-        <button type="submit" className={`${primaryButtonClass} w-full`}>이메일로 로그인</button>
+        <button type="submit" className={`${primaryButtonClass} w-full`}>{t("loginSubmit")}</button>
         <p className="text-right text-sm">
-          <Link href="/forgot" className="text-slate-500 hover:text-slate-900">비밀번호 찾기</Link>
+          <Link href="/forgot" className="text-slate-500 hover:text-slate-900">{t("loginForgot")}</Link>
         </p>
-        {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
       </form>
+      {error ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
       <p className="mt-4 text-center text-sm text-slate-500">
-        계정이 없으신가요? <Link href="/signup" className="font-medium text-slate-900">회원가입</Link>
+        {t("loginNoAccount")} <Link href="/signup" className="font-medium text-slate-900">{t("loginSignup")}</Link>
       </p>
       <p className="mt-3 text-center text-xs leading-5 text-slate-400">
-        로그인하면 <Link href="/legal/terms" className="underline">이용약관</Link>과 <Link href="/legal/privacy" className="underline">개인정보처리방침</Link>에 동의하게 돼요.
+        {t("loginAgreeBefore")} <Link href="/legal/terms" className="underline">{translate(locale, "terms")}</Link> {t("loginAgreeAnd")} <Link href="/legal/privacy" className="underline">{translate(locale, "privacy")}</Link> {t("loginAgreeAfter")}
       </p>
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <p className="mb-3 text-center text-xs text-slate-400">{t("loginSocial")}</p>
+        <SocialRow onPick={enter} />
+      </div>
     </AuthShell>
   );
 }
 
 export function SignupScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const { notify, isEmailTaken, registerAccount, findAccount, login } = useSpark();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [code, setCode] = useState("");
   const [codeSentFor, setCodeSentFor] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
@@ -123,14 +134,16 @@ export function SignupScreen() {
   const [marketing, setMarketing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordError = password ? passwordIssue(password) : null;
+  const confirmError = passwordConfirm && passwordConfirm !== password ? t("signupMismatch") : null;
   const emailKey = email.trim().toLowerCase();
+  const emailError = signupEmailError(email, isEmailTaken(email));
   const codeSent = codeSentFor === emailKey && emailKey.length > 0;
   const verified = verifiedEmail === emailKey && emailKey.length > 0;
 
   function enterAs(next: SparkUser, password = "") {
     registerAccount({ ...next, password });
     login(next);
-    notify(`${next.name}님, Spark에 오신 것을 환영해요.`);
+    notify(fill(t("signupHello"), { name: next.name }));
     router.push("/");
   }
 
@@ -145,32 +158,28 @@ export function SignupScreen() {
   }
 
   function requestVerification() {
-    if (!isEmailShape(email)) {
-      setError("이메일 형식을 확인해 주세요.");
-      return;
-    }
-    if (isEmailTaken(email)) {
+    if (!isEmailShape(email) || isEmailTaken(email)) {
       setCodeSentFor(null);
       setVerifiedEmail(null);
       setCode("");
-      setError("이미 사용 중인 이메일입니다.");
+      setError(emailError ? null : t("emailFormat"));
       return;
     }
     setError(null);
     setCode("");
     setVerifiedEmail(null);
     setCodeSentFor(emailKey);
-    notify(VERIFICATION_SENT);
+    notify(t("codeSent"));
   }
 
   function confirmVerification() {
     if (!codeSent) return;
     if (!/^\d{4,6}$/.test(code)) {
-      setError("인증번호는 4~6자리 숫자로 입력해 주세요.");
+      setError(t("signupCodeDigits"));
       return;
     }
     if (code !== TEST_VERIFICATION_CODE) {
-      setError("인증번호가 올바르지 않습니다.");
+      setError(t("signupCodeBad"));
       return;
     }
     setError(null);
@@ -180,19 +189,23 @@ export function SignupScreen() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!verified) {
-      setError("이메일 인증을 완료해 주세요.");
+      setError(t("signupNeedVerify"));
       return;
     }
-    if (!isEmailShape(email) || passwordIssue(password)) {
-      setError("이메일과 비밀번호를 확인해 주세요.");
+    if (!isEmailShape(email) || emailError || passwordIssue(password)) {
+      setError(emailError ? t(emailError) : t("signupCheck"));
+      return;
+    }
+    if (!passwordConfirm || passwordConfirm !== password) {
+      setError(passwordConfirm ? t("signupMismatch") : t("signupNeedConfirm"));
       return;
     }
     if (!terms || !privacy || !age) {
-      setError("필수 약관에 동의해 주세요.");
+      setError(t("signupNeedTerms"));
       return;
     }
     if (isEmailTaken(email)) {
-      setError("이미 사용 중인 이메일입니다.");
+      setError(t("emailTaken"));
       return;
     }
     setError(null);
@@ -200,28 +213,28 @@ export function SignupScreen() {
   }
 
   return (
-    <AuthShell title="Spark에 가입하기" subtitle="이메일과 비밀번호만 있으면 돼요. 닉네임은 자동으로 만들어집니다.">
-      <SocialRow
-        requireTerms
-        onPick={(user) => {
-          if (isEmailTaken(user.email)) {
-            const existing = findAccount(user.email);
-            if (!existing || existing.provider !== user.provider) {
-              notify("이미 사용 중인 이메일입니다. 로그인해 주세요.");
-              router.push("/login");
-              return;
-            }
-            login(existing);
-            notify(`${existing.name}님, Spark에 오신 것을 환영해요.`);
-            router.push("/");
-            return;
-          }
-          enterAs({ name: createNickname(), email: user.email, provider: user.provider });
-        }}
-      />
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
+    <AuthShell title={t("signupTitle")} subtitle={t("signupSubtitle")}>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="flex justify-end">
+          <QuickFill
+            onFill={() => {
+              const next = `wf${Date.now().toString().slice(-6)}@spark.market`;
+              setEmail(next);
+              setPassword(WIREFRAME_LOGIN.password);
+              setPasswordConfirm(WIREFRAME_LOGIN.password);
+              setTerms(true);
+              setPrivacy(true);
+              setAge(true);
+              setCode("");
+              setVerifiedEmail(null);
+              setCodeSentFor(next.toLowerCase());
+              setCode(TEST_VERIFICATION_CODE);
+              setError(null);
+            }}
+          />
+        </div>
         <div className="block space-y-2">
-          <label htmlFor="signup-email" className="text-xs text-slate-500">이메일</label>
+          <label htmlFor="signup-email" className="text-xs text-slate-500">{t("loginEmail")}</label>
           <div className="flex items-stretch gap-2">
             <input
               id="signup-email"
@@ -230,21 +243,23 @@ export function SignupScreen() {
               value={email}
               onChange={(event) => onEmailChange(event.target.value)}
               placeholder="you@spark.market"
-              className={`${fieldClass} min-w-0 flex-1`}
+              aria-invalid={emailError ? true : undefined}
+              aria-describedby={emailError ? "signup-email-status" : undefined}
+              className={`${fieldClass} min-w-0 flex-1 ${emailError ? "border-rose-300" : ""}`}
             />
             <button
               type="button"
               onClick={requestVerification}
-              className={`${ghostButtonClass} w-[7.5rem] shrink-0 whitespace-normal px-2.5 py-2 text-center text-xs leading-4`}
+              disabled={verified || Boolean(emailError)}
+              className={`${ghostButtonClass} shrink-0 px-4 text-sm`}
             >
-              중복확인 및
-              <br />
-              인증번호 발송
+              {t("signupSendCode")}
             </button>
           </div>
+          {emailError ? <p id="signup-email-status" role="alert" className="text-xs text-rose-600">{t(emailError)}</p> : null}
         </div>
         <div className="block space-y-2">
-          <label htmlFor="signup-code" className="text-xs text-slate-500">인증번호</label>
+          <label htmlFor="signup-code" className="text-xs text-slate-500">{t("signupCode")}</label>
           <div className="flex items-stretch gap-2">
             <input
               id="signup-code"
@@ -254,7 +269,7 @@ export function SignupScreen() {
               value={code}
               disabled={!codeSent || verified}
               onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="4~6자리"
+              placeholder={t("signupCodePh")}
               aria-describedby="signup-code-status"
               className={`${fieldClass} min-w-0 flex-1 disabled:bg-slate-50 disabled:text-slate-400`}
             />
@@ -264,45 +279,92 @@ export function SignupScreen() {
               disabled={!codeSent || verified}
               className={`${ghostButtonClass} shrink-0 px-4`}
             >
-              {verified ? "인증 완료" : "인증 확인"}
+              {verified ? t("signupVerified") : t("signupConfirmCode")}
             </button>
           </div>
           <p id="signup-code-status" role="status" className={`text-xs ${verified ? "font-medium text-emerald-600" : "text-slate-400"}`}>
-            {verified ? "인증 완료" : "인증번호는 4~6자리입니다."}
+            {verified ? t("signupVerified") : t("signupCodeHint")}
           </p>
         </div>
         <div className="block space-y-2">
-          <label htmlFor="signup-password" className="text-xs text-slate-500">비밀번호</label>
+          <label htmlFor="signup-password" className="text-xs text-slate-500">{t("signupPassword")}</label>
           <input
             id="signup-password"
             type="password"
             autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="10~20자"
+            placeholder={t("signupPasswordPh")}
             aria-describedby="signup-password-hint"
             className={fieldClass}
           />
           <p id="signup-password-hint" className={`text-xs ${passwordError ? "text-rose-600" : "text-slate-400"}`}>
-            {passwordError ?? "10~20자, 숫자·대문자·소문자·특수기호(! ~ - * ^) 중 3종류 이상"}
+            {passwordError ? t(passwordError) : t("passHint")}
           </p>
+        </div>
+        <div className="block space-y-2">
+          <label htmlFor="signup-password-confirm" className="text-xs text-slate-500">{t("signupPasswordConfirm")}</label>
+          <input
+            id="signup-password-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={passwordConfirm}
+            onChange={(event) => {
+              setPasswordConfirm(event.target.value);
+              setError(null);
+            }}
+            placeholder={t("signupPasswordAgain")}
+            aria-invalid={confirmError ? true : undefined}
+            aria-describedby={confirmError ? "signup-password-confirm-hint" : undefined}
+            className={`${fieldClass} ${confirmError ? "border-rose-300" : ""}`}
+          />
+          {confirmError ? <p id="signup-password-confirm-hint" role="alert" className="text-xs text-rose-600">{confirmError}</p> : null}
         </div>
 
         <div className="space-y-2 pt-2">
-          <Check checked={terms} onChange={setTerms} label="[필수] 서비스 이용약관 동의" href="/legal/terms" />
-          <Check checked={privacy} onChange={setPrivacy} label="[필수] 개인정보 수집 및 이용 동의" href="/legal/privacy" />
-          <Check checked={age} onChange={setAge} label="[필수] 만 14세 이상입니다" />
-          <Check checked={marketing} onChange={setMarketing} label="[선택] 마케팅 정보 수신 동의" />
+          <Check checked={terms} onChange={setTerms} label={t("signupTerms")} href="/legal/terms" viewLabel={t("viewLink")} />
+          <Check checked={privacy} onChange={setPrivacy} label={t("signupPrivacy")} href="/legal/privacy" viewLabel={t("viewLink")} />
+          <Check checked={age} onChange={setAge} label={t("signupAge")} />
+          <Check checked={marketing} onChange={setMarketing} label={t("signupMarketing")} />
         </div>
 
-        <button type="submit" disabled={!verified} className={`${primaryButtonClass} w-full`}>완료</button>
+        <button type="submit" disabled={!verified || Boolean(passwordError) || Boolean(confirmError)} className={`${primaryButtonClass} w-full`}>{t("signupDone")}</button>
         {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
       </form>
       <p className="mt-4 text-center text-sm text-slate-500">
-        이미 계정이 있으신가요? <Link href="/login" className="font-medium text-slate-900">로그인</Link>
+        {t("signupHasAccount")} <Link href="/login" className="font-medium text-slate-900">{t("signupLogin")}</Link>
       </p>
+      <div className="mt-6 border-t border-slate-100 pt-5">
+        <p className="mb-3 text-center text-xs text-slate-400">또는 소셜 계정으로 가입하기</p>
+        <SocialRow
+          requireTerms
+          onPick={(user) => {
+            if (isEmailTaken(user.email)) {
+              const existing = findAccount(user.email);
+              if (!existing || existing.provider !== user.provider) {
+                notify("이미 사용 중인 이메일입니다. 로그인해 주세요.");
+                router.push("/login");
+                return;
+              }
+              login(existing);
+              notify(`${existing.name}님, Spark에 오신 것을 환영해요.`);
+              router.push("/");
+              return;
+            }
+            enterAs({ name: createNickname(), email: user.email, provider: user.provider });
+          }}
+        />
+      </div>
     </AuthShell>
   );
+}
+
+function signupEmailError(email: string, taken: boolean) {
+  const value = email.trim();
+  if (!value.includes("@")) return null;
+  if (!isEmailShape(value)) return "emailFormat" as const;
+  if (taken) return "emailTaken" as const;
+  return null;
 }
 
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
@@ -319,6 +381,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 }
 
 function SocialRow({ onPick, requireTerms = false }: { onPick: (user: SparkUser) => void; requireTerms?: boolean }) {
+  const { t } = useI18n();
   const [active, setActive] = useState<SocialProviderId | null>(null);
   const [agreed, setAgreed] = useState(false);
   const provider = SOCIAL_PROVIDERS.find((item) => item.id === active);
@@ -343,7 +406,7 @@ function SocialRow({ onPick, requireTerms = false }: { onPick: (user: SparkUser)
           <span aria-hidden className="inline-flex h-5 w-5 items-center justify-center text-xs font-semibold">
             {item.id === "apple" ? <AppleMark /> : item.mark}
           </span>
-          {item.label}
+          {t(item.label)}
         </button>
       ))}
       {provider && requireTerms && !agreed ? (
@@ -355,7 +418,7 @@ function SocialRow({ onPick, requireTerms = false }: { onPick: (user: SparkUser)
           onCancel={close}
           onSuccess={(email) => {
             const picked = {
-              name: `${provider.name} 사용자`,
+              name: fill(t("socialUser"), { name: provider.name }),
               email,
               provider: provider.id,
             };
@@ -377,6 +440,7 @@ function SocialTermsModal({
   onCancel: () => void;
   onAgree: () => void;
 }) {
+  const { t } = useI18n();
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [age, setAge] = useState(false);
@@ -385,7 +449,7 @@ function SocialTermsModal({
 
   function agree() {
     if (!terms || !privacy || !age) {
-      setError("필수 약관에 동의해 주세요.");
+      setError(t("signupNeedTerms"));
       return;
     }
     onAgree();
@@ -401,19 +465,19 @@ function SocialTermsModal({
         onClick={(event) => event.stopPropagation()}
       >
         <p className="text-[11px] font-medium tracking-[0.18em] text-slate-400">{provider.name}</p>
-        <h2 id="social-terms-title" className="mt-2 text-lg font-semibold text-slate-900">소셜 회원가입 약관 동의</h2>
+        <h2 id="social-terms-title" className="mt-2 text-lg font-semibold text-slate-900">{t("socialTermsTitle")}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          {provider.name} 계정으로 가입하려면 필수 약관에 동의해 주세요. 동의하기 전에는 계정이 만들어지지 않습니다.
+          {fill(t("socialTermsBody"), { name: provider.name })}
         </p>
         <div className="mt-4 space-y-1">
-          <Check checked={terms} onChange={setTerms} label="[필수] 서비스 이용약관 동의" href="/legal/terms" />
-          <Check checked={privacy} onChange={setPrivacy} label="[필수] 개인정보 수집 및 이용 동의" href="/legal/privacy" />
-          <Check checked={age} onChange={setAge} label="[필수] 만 14세 이상입니다" />
-          <Check checked={marketing} onChange={setMarketing} label="[선택] 마케팅 정보 수신 동의" />
+          <Check checked={terms} onChange={setTerms} label={t("signupTerms")} href="/legal/terms" viewLabel={t("viewLink")} />
+          <Check checked={privacy} onChange={setPrivacy} label={t("signupPrivacy")} href="/legal/privacy" viewLabel={t("viewLink")} />
+          <Check checked={age} onChange={setAge} label={t("signupAge")} />
+          <Check checked={marketing} onChange={setMarketing} label={t("signupMarketing")} />
         </div>
         {error ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
-        <button type="button" onClick={agree} className={`${primaryButtonClass} mt-5 w-full`}>동의하고 가입하기</button>
-        <button type="button" onClick={onCancel} className={`${ghostButtonClass} mt-2 w-full`}>취소</button>
+        <button type="button" onClick={agree} className={`${primaryButtonClass} mt-5 w-full`}>{t("socialAgree")}</button>
+        <button type="button" onClick={onCancel} className={`${ghostButtonClass} mt-2 w-full`}>{t("cancel")}</button>
       </div>
     </div>
   );
@@ -428,6 +492,7 @@ function SocialAuthModal({
   onCancel: () => void;
   onSuccess: (email: string) => void;
 }) {
+  const { t } = useI18n();
   const providedEmail = `${provider.id}.user@spark.market`;
   const [email, setEmail] = useState(providedEmail);
   const [error, setError] = useState<string | null>(null);
@@ -436,7 +501,7 @@ function SocialAuthModal({
 
   function finish() {
     if (!isEmailShape(email)) {
-      setError("이메일 형식을 확인해 주세요.");
+      setError(t("emailFormat"));
       return;
     }
     setError(null);
@@ -452,20 +517,20 @@ function SocialAuthModal({
         className="w-full max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className={`px-6 py-4 text-sm font-medium ${provider.className}`}>{provider.name} 가상 인증</div>
+        <div className={`px-6 py-4 text-sm font-medium ${provider.className}`}>{fill(t("socialMock"), { name: provider.name })}</div>
         <div className="px-6 py-5">
-          <h2 id="social-auth-title" className="text-lg font-semibold text-slate-900">{provider.name} 계정으로 연결</h2>
+          <h2 id="social-auth-title" className="text-lg font-semibold text-slate-900">{fill(t("socialConnect"), { name: provider.name })}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Spark가 {provider.name} 계정의 기본 프로필을 확인합니다. 이 창은 실제 서비스로 이동하지 않는 가상 인증입니다.
+            {fill(t("socialMockBody"), { name: provider.name })}
           </p>
-          <p className="mt-4 text-xs text-slate-400">{provider.name}이 제공한 이메일을 채워 두었습니다. 필요하면 바꿀 수 있어요.</p>
-          <label className="mt-3 block space-y-2 text-xs text-slate-500">이메일
+          <p className="mt-4 text-xs text-slate-400">{fill(t("socialEmailHint"), { name: provider.name })}</p>
+          <label className="mt-3 block space-y-2 text-xs text-slate-500">{t("loginEmail")}
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} />
           </label>
           {error ? <p role="alert" className="mt-2 text-sm text-rose-600">{error}</p> : null}
-          <button type="button" onClick={finish} className={`${primaryButtonClass} mt-4 w-full`}>이 이메일로 계속</button>
+          <button type="button" onClick={finish} className={`${primaryButtonClass} mt-4 w-full`}>{t("socialContinue")}</button>
           <button type="button" onClick={onCancel} className={`${ghostButtonClass} mt-2 w-full`}>
-            취소
+            {t("cancel")}
           </button>
         </div>
       </div>
@@ -481,7 +546,7 @@ function AppleMark() {
   );
 }
 
-function Check({ checked, onChange, label, href }: { checked: boolean; onChange: (value: boolean) => void; label: string; href?: string }) {
+function Check({ checked, onChange, label, href, viewLabel = "보기" }: { checked: boolean; onChange: (value: boolean) => void; label: string; href?: string; viewLabel?: string }) {
   return (
     <label className="flex items-start gap-3 rounded-xl px-1 py-1.5 text-sm text-slate-700">
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-0.5 h-4 w-4" />
@@ -491,7 +556,7 @@ function Check({ checked, onChange, label, href }: { checked: boolean; onChange:
           <>
             {" "}
             <Link href={href} className="text-slate-400 underline" onClick={(event) => event.stopPropagation()}>
-              보기
+              {viewLabel}
             </Link>
           </>
         ) : null}

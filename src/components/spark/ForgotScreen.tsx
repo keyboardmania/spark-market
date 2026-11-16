@@ -5,9 +5,11 @@ import { useState, type FormEvent } from "react";
 import { passwordIssue } from "@/components/spark/AuthScreens";
 import { fieldClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { useI18n } from "@/features/i18n/useI18n";
 
 export function ForgotScreen() {
   const { requestResetCode, resetPassword } = useSpark();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -20,7 +22,7 @@ export function ForgotScreen() {
     setError(null);
     if (!requestResetCode(email.trim())) {
       setSent(false);
-      setError("가입된 이메일을 확인해 주세요.");
+      setError(t("forgotEmail"));
       return;
     }
     setSent(true);
@@ -30,7 +32,7 @@ export function ForgotScreen() {
     event.preventDefault();
     if (!sent || issue) return;
     if (!resetPassword(email.trim(), code.trim(), password)) {
-      setError("인증번호가 맞지 않거나 이메일 계정이 아니에요.");
+      setError(t("forgotBad"));
       return;
     }
     setDone(true);
@@ -61,7 +63,7 @@ export function ForgotScreen() {
           <label className="block space-y-2">
             <span className="text-xs text-slate-500">새 비밀번호</span>
             <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={fieldClass} />
-            {issue ? <span className="block text-xs text-rose-600">{issue}</span> : null}
+            {issue ? <span className="block text-xs text-rose-600">{t(issue)}</span> : null}
           </label>
           <button type="submit" disabled={!sent || Boolean(issue) || !password} className={`${primaryButtonClass} w-full`}>
             비밀번호 변경

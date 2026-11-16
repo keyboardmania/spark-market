@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { formatPrice, type Order, type OrderStatus } from "@/data/mockData";
+import { SalesManageView } from "@/components/spark/SalesManageView";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { useI18n } from "@/features/i18n/useI18n";
+import { statusLabel } from "@/features/i18n/ui";
 import { useMounted } from "@/components/spark/useMounted";
 
 const SALE_TRADE_FILTERS = [
@@ -34,12 +37,6 @@ const TRADE_TONE = {
   "거래 완료": "bg-emerald-50 text-emerald-700",
   거래취소: "bg-zinc-100 text-zinc-400",
 } as const;
-
-function saleTradePhase(status: OrderStatus): Exclude<SaleTradeFilter, "ALL"> {
-  if (status === "구매확정") return "DONE";
-  if (status === "거래취소") return "CANCELLED";
-  return "OPEN";
-}
 
 export function buyPhase(status: OrderStatus): BuyPhase {
   if (status === "구매확정") return "DONE";
@@ -87,6 +84,7 @@ export function OrdersView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { orders, updateOrder, notify } = useSpark();
+  const { t } = useI18n();
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const statusParam = searchParams.get("status");
   const tab = resolveTab(searchParams.get("tab"));
@@ -112,18 +110,13 @@ export function OrdersView() {
     replaceQuery(params);
   }
 
+  if (tab === "sale") return <SalesManageView />;
+
   if (!mounted) {
     return <div className="mx-auto max-w-4xl px-4 py-8"><div className="h-80 animate-pulse rounded-2xl bg-slate-100" /></div>;
   }
 
-  const visible = orders.filter((order) => {
-    if (tab === "sale") {
-      if (order.role !== "sale") return false;
-      return saleFilter === "ALL" || saleTradePhase(order.status) === saleFilter;
-    }
-    if (order.role !== "purchase") return false;
-    return buyFilter === "ALL" || buyPhase(order.status) === buyFilter;
-  });
+  const visible = orders.filter((order) => order.role === "purchase" && (buyFilter === "ALL" || buyPhase(order.status) === buyFilter));
 
   function confirmPurchase(order: Order) {
     updateOrder(order.id, { status: "구매확정" });
@@ -148,7 +141,7 @@ export function OrdersView() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="거래 상태">
-        {(tab === "sale" ? SALE_TRADE_FILTERS : BUY_STATUS_FILTERS).map((filter) => (
+        {BUY_STATUS_FILTERS.map((filter) => (
           <button
             key={filter.id}
             type="button"
@@ -181,13 +174,13 @@ export function OrdersView() {
                   </Link>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${trade.tone}`}>{trade.label}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${trade.tone}`}>{statusLabel(t, trade.label)}</span>
                       <span className="text-xs text-slate-400">{order.orderedAt}</span>
                     </div>
                     <h2 className="mt-2 text-base font-medium text-slate-900">
                       <Link href={`/orders/${order.id}`} className="hover:underline">{order.title}</Link>
                     </h2>
-                    <p className="mt-1 text-sm text-slate-500">{isPurchase ? "판매자" : "구매자"} {order.counterpart} · {formatPrice(order.price)}</p>
+                    <p className="mt-1 text-sm text-slate-500">{isPurchase ? t("partySeller") : t("partyBuyer")} {order.counterpart} · {formatPrice(order.price)}</p>
                   </div>
                 </div>
 

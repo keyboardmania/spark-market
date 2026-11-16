@@ -7,26 +7,28 @@ import {
   CATEGORIES,
   MAX_LIST_PRICE,
   ORIGINS,
-  SALE_STATUS_OPTIONS,
-  detectKeywordFromImage,
+  analyzeListingImage,
   formatPrice,
   orderMedia,
-  quoteForKeyword,
+  relocateListingImage,
   representativeImage,
   type Category,
+  type ListingAnalysis,
   type Origin,
   type Product,
   type ProductMedia,
   type SaleStatus,
 } from "@/data/mockData";
+import { ListingMediaUploader } from "@/components/spark/ListingMediaUploader";
 import { ProductCard } from "@/components/spark/ProductCard";
+import { SaleStatusMenu } from "@/components/spark/SaleStatusMenu";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import { productDeleteBlock, saleStatusLabel } from "@/features/trade/productGuards";
 
 const MEDIA_HINT = "사진첩에서만 선택 · 최소 1개, 최대 10개 · 사진(png, jpg, jpeg), 동영상(mp4, mov)";
 const MAX_MEDIA = 10;
-const SOLD_MESSAGE = "판매 완료된 상품은 수정할 수 없습니다.";
 
 type Draft = {
   title: string;
@@ -125,32 +127,17 @@ function readFile(file: File) {
   });
 }
 
-function moveItem(media: ProductMedia[], id: string, direction: -1 | 1) {
-  const ordered = orderMedia(media);
-  const index = ordered.findIndex((item) => item.id === id);
-  const target = index + direction;
-  if (index < 0 || target < 0 || target >= ordered.length) return ordered;
-  const next = [...ordered];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item);
-  return orderMedia(next.map((entry, order) => ({ ...entry, displayOrder: order })));
-}
-
 export function SellForm({ productId }: { productId?: string }) {
   const router = useRouter();
-  const { addProduct, updateProduct, products, isProductDeleted, notify } = useSpark();
+  const { addProduct, updateProduct, products, orders, rooms, isProductDeleted, notify } = useSpark();
   const mounted = useMounted();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const warned = useRef(false);
   const hydratedId = useRef<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [soldOpen, setSoldOpen] = useState(false);
   const editing = Boolean(productId);
   const product = productId ? products.find((item) => item.id === productId) : undefined;
   const deleted = productId ? isProductDeleted(productId) : false;
-  const locked = product?.saleStatus === "판매완료";
   const palette = paletteFor(draft.category);
   const media = orderMedia(draft.media);
   const cover = representativeImage(media);
@@ -186,12 +173,12 @@ export function SellForm({ productId }: { productId?: string }) {
     setDraft(draftFrom(product));
   }, [product]);
 
-  useEffect(() => {
-    if (!locked || warned.current) return;
-    warned.current = true;
-    setSoldOpen(true);
-    notify(SOLD_MESSAGE);
-  }, [locked, notify]);
+  function changeStatus(next: SaleStatus) {
+    setDraft((current) => ({ ...current, saleStatus: next }));
+    if (!product) return;
+    const updated = updateProduct(product.id, { saleStatus: next });
+    if (updated) notify(`판매 상태를 ${saleStatusLabel(next)} 바꿨어요. 가격과 내용을 이어서 수정할 수 있어요.`);
+  }
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -202,7 +189,6 @@ export function SellForm({ productId }: { productId?: string }) {
 
   async function onFiles(files: FileList | null) {
     const incoming = files ? [...files] : [];
-    if (fileRef.current) fileRef.current.value = "";
     if (incoming.length === 0) return;
     const invalid = incoming.filter((file) => !mediaKind(file));
     const valid = incoming.filter((file) => mediaKind(file));
@@ -229,8 +215,17 @@ export function SellForm({ productId }: { productId?: string }) {
     setDraft((current) => ({ ...current, media: orderMedia(current.media.filter((item) => item.id !== id)) }));
   }
 
-  function moveMedia(id: string, direction: -1 | 1) {
-    setDraft((current) => ({ ...current, media: moveItem(current.media, id, direction) }));
+  function reorderMedia(sourceId: string, targetId: string) {
+    setDraft((current) => ({ ...current, media: relocateListingImage(current.media, sourceId, targetId) }));
+  }
+
+  function applyAnalysis(analysis: ListingAnalysis) {
+    setDraft((current) => ({
+      ...current,
+      price: String(analysis.recommendedPrice),
+      category: current.category || analysis.category,
+    }));
+    setErrors((current) => ({ ...current, price: undefined, category: undefined }));
   }
 
   function validate(next: Draft) {
@@ -248,11 +243,6 @@ export function SellForm({ productId }: { productId?: string }) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (locked) {
-      setSoldOpen(true);
-      notify(SOLD_MESSAGE);
-      return;
-    }
     const nextErrors = validate(draft);
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) return;
@@ -281,8 +271,7 @@ export function SellForm({ productId }: { productId?: string }) {
     if (editing && product) {
       const updated = updateProduct(product.id, saved);
       if (!updated) {
-        setSoldOpen(true);
-        notify(SOLD_MESSAGE);
+        notify("삭제한 상품은 수정할 수 없어요.");
         return;
       }
       setNotice(`${saved.title} 매물을 수정했어요.`);
@@ -325,89 +314,25 @@ export function SellForm({ productId }: { productId?: string }) {
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{editing ? "상품 수정" : "상품 등록"}</h1>
       <p className="mt-2 text-sm text-slate-500">
         {editing
-          ? "판매 상태, 미디어 순서, 상품 정보를 수정할 수 있어요. 판매완료 매물은 잠깁니다."
+          ? "판매 상태는 완료 이후에도 뱃지에서 다시 바꿀 수 있어요. 상태를 바꾸면 가격과 내용도 자유롭게 수정됩니다."
           : "사진첩에서 미디어를 올리고 판매 상태를 고르세요. 기본값은 판매중입니다."}
       </p>
 
       <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <form noValidate onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <fieldset disabled={locked} className="space-y-5 disabled:opacity-60">
-            <div>
-              <p className="text-xs font-medium text-slate-500">사진 / 동영상</p>
-              <p className="mt-1 text-xs leading-5 text-slate-400">{MEDIA_HINT}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-400">맨 앞 사진이 대표 이미지입니다. 순서를 바꾸면 대표도 바뀌고, 동영상은 대표와 AI 시세에서 빠집니다.</p>
-              <Link href="/prohibited" className="mt-1 inline-flex text-xs font-medium text-slate-700 underline-offset-4 hover:underline">판매 금지 품목</Link>
-              <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  multiple
-                  accept=".png,.jpg,.jpeg,.mp4,.mov,image/png,image/jpeg,video/mp4,video/quicktime"
-                  className="sr-only"
-                  onChange={(event) => void onFiles(event.target.files)}
-                />
-                {media.length === 0 ? (
-                  <div className="grid h-24 w-24 place-items-center rounded-xl bg-white text-xs text-slate-400">미리보기</div>
-                ) : (
-                  <ul className="flex flex-wrap gap-3" aria-label="미디어 순서">
-                    {media.map((item, index) => (
-                      <li key={item.id} className="w-24">
-                        <div className="relative">
-                          {item.kind === "video" ? (
-                            <video src={item.url} className="h-24 w-24 rounded-xl bg-slate-900 object-cover" muted />
-                          ) : (
-                            <img src={item.url} alt={item.name} className="h-24 w-24 rounded-xl object-cover" />
-                          )}
-                          <span className="absolute left-1 top-1 rounded-full bg-slate-900/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                            {item.thumbnailed ? "대표" : item.kind === "video" ? "동영상" : index + 1}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeMedia(item.id)}
-                            className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-white text-xs text-slate-500 shadow"
-                            aria-label={`${item.name} 삭제`}
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <p className="mt-1 truncate text-center text-[10px] text-slate-400" title={item.name}>
-                          순서 {item.displayOrder ?? index}
-                        </p>
-                        <div className="mt-1 flex justify-center gap-1">
-                          <button
-                            type="button"
-                            disabled={index === 0}
-                            onClick={() => moveMedia(item.id, -1)}
-                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-30"
-                            aria-label={`${item.name} 순서를 앞으로`}
-                          >
-                            앞
-                          </button>
-                          <button
-                            type="button"
-                            disabled={index === media.length - 1}
-                            onClick={() => moveMedia(item.id, 1)}
-                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-30"
-                            aria-label={`${item.name} 순서를 뒤로`}
-                          >
-                            뒤
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => fileRef.current?.click()} className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm">
-                    사진첩에서 선택
-                  </button>
-                  <span className="text-xs text-slate-400">{media.length}/{MAX_MEDIA}</span>
-                </div>
-              </div>
-              {errors.media ? <p className="mt-2 text-xs text-rose-600">{errors.media}</p> : null}
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <ListingMediaUploader
+                media={media}
+                error={errors.media}
+                onFiles={(files) => void onFiles(files)}
+                onRemove={removeMedia}
+                onReorder={reorderMedia}
+              />
+              <Link href="/prohibited" className="inline-flex text-xs font-medium text-slate-700 underline-offset-4 hover:underline">판매 금지 품목</Link>
             </div>
 
-            <AiQuotePanel image={cover} />
+            <AiAssist key={cover?.id ?? "no-cover"} media={media} onApply={applyAnalysis} />
 
             <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">상품명</span>
@@ -438,15 +363,11 @@ export function SellForm({ productId }: { productId?: string }) {
               </label>
             </div>
 
-            <label className="block space-y-2">
+            <div className="space-y-2">
               <span className="text-xs font-medium text-slate-500">판매 상태</span>
-              <select value={draft.saleStatus} onChange={(event) => update("saleStatus", event.target.value as SaleStatus)} className={fieldClass}>
-                {SALE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.code} value={option.status}>{option.label}</option>
-                ))}
-              </select>
-              <span className="block text-xs text-slate-400">신규 등록 기본값은 판매중(ON_SALE)입니다.</span>
-            </label>
+              <SaleStatusMenu status={draft.saleStatus} onChange={changeStatus} />
+              <span className="block text-xs text-slate-400">판매중, 예약중, 판매완료를 언제든 다시 고를 수 있어요.</span>
+            </div>
 
             <label className="block space-y-2">
               <span className="text-xs font-medium text-slate-500">가격 (USD)</span>
@@ -494,7 +415,7 @@ export function SellForm({ productId }: { productId?: string }) {
 
             {Object.values(errors).some(Boolean) ? <p role="alert" className="text-sm text-rose-600">입력한 내용을 다시 확인해 주세요.</p> : null}
             <button type="submit" className={`${primaryButtonClass} w-full`}>{editing ? "수정 저장" : "매물 등록"}</button>
-          </fieldset>
+          </div>
           {editing && product ? (
             <div className="mt-4">
               <DeleteProductButton product={product} onDeleted={() => router.push("/sell")} />
@@ -535,55 +456,81 @@ export function SellForm({ productId }: { productId?: string }) {
           </div>
         ) : null}
       </div>
-
-      {soldOpen ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4" onClick={() => setSoldOpen(false)}>
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="sold-lock-title"
-            className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="sold-lock-title" className="text-lg font-semibold text-slate-900">수정할 수 없어요</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{SOLD_MESSAGE}</p>
-            <button type="button" onClick={() => setSoldOpen(false)} className={`${primaryButtonClass} mt-5 w-full`}>확인</button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
 
-function AiQuotePanel({ image }: { image: ProductMedia | null }) {
-  if (!image) {
-    return (
-      <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4" aria-label="AI 시세">
-        <p className="text-xs font-medium text-slate-500">AI 시세</p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">대표 사진을 올리면 감지 키워드와 최근 판매완료 100개의 평균가를 나란히 보여 드려요. 동영상은 분석하지 않아요.</p>
-      </section>
-    );
+function AiAssist({ media, onApply }: { media: ProductMedia[]; onApply: (analysis: ListingAnalysis) => void }) {
+  const alive = useRef(true);
+  const image = representativeImage(media);
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState<ListingAnalysis | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  async function lookup() {
+    const target = representativeImage(media);
+    if (!target || target.kind !== "image") {
+      setResult(null);
+      setError("분석할 1번 대표 이미지가 없어요. 사진을 첫 번째로 올려 주세요.");
+      return;
+    }
+    setError(null);
+    setPending(true);
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 700);
+    });
+    if (!alive.current) return;
+    const analysis = analyzeListingImage(target.name, target.url);
+    setResult(analysis);
+    setPending(false);
+    onApply(analysis);
   }
 
-  const keyword = detectKeywordFromImage(image.name, image.url);
-  const quote = quoteForKeyword(keyword);
-
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4" aria-label="AI 시세">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-xs font-medium text-slate-500">AI 시세</p>
-        <p className="truncate text-[11px] text-slate-400">대표 이미지 · {image.name}</p>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-white px-3 py-3">
-          <p className="text-[11px] text-slate-400">감지 키워드</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{keyword}</p>
+    <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4" aria-label="AI 분석">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-slate-500">AI 분석</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            {image
+              ? `1번 대표 이미지 ${image.name}만 조회합니다. 나머지 사진과 동영상은 분석하지 않아요.`
+              : "1번 대표 이미지를 올린 뒤 버튼을 누르면 그 사진의 키워드와 가격만 채웁니다."}
+          </p>
         </div>
-        <div className="rounded-xl bg-white px-3 py-3">
-          <p className="text-[11px] text-slate-400">최근 판매완료 {quote.sampleSize}개 평균</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatPrice(quote.average)}</p>
-        </div>
+        <button
+          type="button"
+          onClick={() => void lookup()}
+          disabled={!image || pending}
+          className={`${ghostButtonClass} shrink-0`}
+        >
+          {pending ? "분석 중" : "AI 분석 조회하기"}
+        </button>
       </div>
+      {error ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
+      {result ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl bg-white px-3 py-3">
+            <p className="text-[11px] text-slate-400">추천 키워드</p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {result.keywords.map((keyword) => (
+                <li key={keyword} className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white">{keyword}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl bg-white px-3 py-3">
+            <p className="text-[11px] text-slate-400">추천 가격 · 판매완료 {result.sampleSize}건</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">{formatPrice(result.recommendedPrice)}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">1번 대표 이미지 기준으로 가격란에 넣었어요. 물품 종류가 비어 있으면 {result.category}로 채웁니다.</p>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -597,8 +544,9 @@ export function DeleteProductButton({
   variant?: "ghost" | "text";
   onDeleted?: () => void;
 }) {
-  const { softDeleteProduct, notify } = useSpark();
+  const { softDeleteProduct, notify, rooms, orders } = useSpark();
   const [open, setOpen] = useState(false);
+  const block = productDeleteBlock(product, rooms, orders);
 
   return (
     <>
@@ -618,24 +566,27 @@ export function DeleteProductButton({
             className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="delete-product-title" className="text-lg font-semibold text-slate-900">상품을 삭제할까요?</h2>
+            <h2 id="delete-product-title" className="text-lg font-semibold text-slate-900">{block ? "삭제할 수 없어요" : "상품을 삭제할까요?"}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {product.title}을 삭제하면 복구할 수 없습니다. 목록에서 바로 사라집니다.
+              {block ?? `${product.title}을 삭제하면 복구할 수 없습니다. 목록에서 바로 사라집니다.`}
             </p>
             <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setOpen(false)} className={`${ghostButtonClass} flex-1`}>취소</button>
-              <button
-                type="button"
-                onClick={() => {
-                  softDeleteProduct(product.id);
-                  setOpen(false);
-                  notify("상품을 삭제했어요. 복구할 수 없습니다.");
-                  onDeleted?.();
-                }}
-                className={`${primaryButtonClass} flex-1`}
-              >
-                삭제
-              </button>
+              <button type="button" onClick={() => setOpen(false)} className={`${ghostButtonClass} flex-1`}>{block ? "확인" : "취소"}</button>
+              {block ? null : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const removed = softDeleteProduct(product.id);
+                    if (!removed) return;
+                    setOpen(false);
+                    notify("상품을 삭제했어요. 복구할 수 없습니다.");
+                    onDeleted?.();
+                  }}
+                  className={`${primaryButtonClass} flex-1`}
+                >
+                  삭제
+                </button>
+              )}
             </div>
           </div>
         </div>

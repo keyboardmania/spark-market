@@ -11,15 +11,15 @@ import { useMounted } from "@/components/spark/useMounted";
 import { SANCTIONS, type SparkUser } from "@/data/mockData";
 
 const TRADE_LINKS = [
-  { href: "/orders", label: "거래 내역", hint: "구매와 판매 상태" },
-  { href: "/selling", label: "판매 관리", hint: "등록한 상품" },
+  { href: "/orders", label: "거래 내역", hint: "구매와 판매, 배송·정산" },
+  { href: "/orders?tab=sale", label: "판매 내역", hint: "수락, 배송, 정산" },
   { href: "/mypage/wishlist", label: "찜한 상품", hint: "관심 매물" },
   { href: "/mypage/reviews", label: "내 리뷰", hint: "작성한 후기" },
   { href: "/chat", label: "1:1 채팅", hint: "거래 대화" },
 ] as const;
 
 const SETTING_LINKS = [
-  { href: "/mypage/profile", label: "프로필", hint: "사진과 닉네임" },
+  { href: "/mypage/profile", label: "회원 정보", hint: "닉네임과 사진" },
   { href: "/mypage/addresses", label: "배송지 관리", hint: "받는 주소" },
   { href: "/mypage/accounts", label: "계좌 관리", hint: "정산 계좌" },
   { href: "/mypage/notifications", label: "알림", hint: "수신 설정과 알림함" },

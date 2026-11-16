@@ -4,6 +4,10 @@ import { useState, type ReactNode } from "react";
 import { ADDRESS_LIMIT, ADDRESS_LIMIT_MESSAGE, type ShippingAddress } from "@/data/mockData";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { useI18n } from "@/features/i18n/useI18n";
+import { fill } from "@/features/i18n/ui";
+import { QuickFill } from "@/features/wireframe/QuickFill";
+import { QUICK_ADDRESS } from "@/features/wireframe/demoProfile";
 
 type DefaultChoice = "" | "O" | "X";
 
@@ -29,6 +33,7 @@ const EMPTY: Draft = {
 
 export function AddressBook() {
   const { addresses, addAddress, updateAddress, removeAddress, setDefaultAddress, notify } = useSpark();
+  const { t } = useI18n();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -73,15 +78,15 @@ export function AddressBook() {
 
   function validate(next: Draft) {
     const found: Partial<Record<FieldKey, string>> = {};
-    if (!next.name.trim()) found.name = "이름을 입력해 주세요.";
-    if (!next.phone.trim()) found.phone = "전화번호를 입력해 주세요.";
-    if (!next.address.trim()) found.address = "주소를 입력해 주세요.";
-    if (!next.detail.trim()) found.detail = "상세주소를 입력해 주세요.";
-    if (!next.postalCode.trim()) found.postalCode = "우편번호를 입력해 주세요.";
+    if (!next.name.trim()) found.name = t("addrNameNeed");
+    if (!next.phone.trim()) found.phone = t("addrPhoneNeed");
+    if (!next.address.trim()) found.address = t("addrAddressNeed");
+    if (!next.detail.trim()) found.detail = t("addrDetailNeed");
+    if (!next.postalCode.trim()) found.postalCode = t("addrPostalNeed");
     if (next.defaultChoice !== "O" && next.defaultChoice !== "X") {
-      found.defaultChoice = "기본 배송지 설정(O/X)을 선택해 주세요.";
+      found.defaultChoice = t("addrDefaultNeed");
     } else if (editing?.isDefault && next.defaultChoice === "X") {
-      found.defaultChoice = "다른 주소를 먼저 기본 배송지로 변경해 주세요.";
+      found.defaultChoice = t("addrKeepDefault");
     }
     return found;
   }
@@ -108,7 +113,7 @@ export function AddressBook() {
         return;
       }
       if (result === "ok") {
-        notify("배송지를 수정했어요.");
+        notify(t("addrEdited"));
         closeForm();
       }
       return;
@@ -119,7 +124,7 @@ export function AddressBook() {
       setLimitOpen(true);
       return;
     }
-    notify(payload.isDefault && addresses.length > 0 ? "기본 배송지로 등록했어요." : "배송지를 등록했어요.");
+    notify(payload.isDefault && addresses.length > 0 ? t("addrCreatedDefault") : t("addrCreated"));
     closeForm();
   }
 
@@ -128,21 +133,41 @@ export function AddressBook() {
       setDefaultLockOpen(true);
       return;
     }
-    notify("배송지를 삭제했어요.");
+    notify(t("addrDeleted"));
   }
 
   return (
     <section id="addresses">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">배송지 관리</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{t("addrTitle")}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            이름, 전화번호, 주소, 상세주소, 우편번호, 기본 배송지(O/X)는 모두 필수예요. {addresses.length}/{ADDRESS_LIMIT}개
+            {fill(t("addrCount"), { count: `${addresses.length}/${ADDRESS_LIMIT}` })}
           </p>
         </div>
-        <button type="button" onClick={openCreate} className={primaryButtonClass}>
-          배송지 추가
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <QuickFill
+            onFill={() => {
+              if (!formOpen) {
+                if (addresses.length >= ADDRESS_LIMIT) {
+                  setLimitOpen(true);
+                  return;
+                }
+                setEditingId(null);
+                setFormOpen(true);
+              }
+              const only = !editingId && addresses.length === 0;
+              setDraft({
+                ...QUICK_ADDRESS,
+                defaultChoice: only || lockDefault ? "O" : "X",
+              });
+              setErrors({});
+            }}
+          />
+          <button type="button" onClick={openCreate} className={primaryButtonClass}>
+            {t("addrAdd")}
+          </button>
+        </div>
       </div>
 
       {formOpen ? (
@@ -153,18 +178,18 @@ export function AddressBook() {
             submit();
           }}
         >
-          <h3 className="text-base font-semibold text-slate-900">{editingId ? "배송지 수정" : "새 배송지"}</h3>
+          <h3 className="text-base font-semibold text-slate-900">{editingId ? t("addrEditTitle") : t("addrNew")}</h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Field label="이름" error={errors.name}>
+            <Field label={t("addrName")} error={errors.name}>
               <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className={fieldClass} aria-invalid={Boolean(errors.name)} />
             </Field>
-            <Field label="전화번호" error={errors.phone}>
+            <Field label={t("addrPhone")} error={errors.phone}>
               <input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} inputMode="tel" className={fieldClass} aria-invalid={Boolean(errors.phone)} />
             </Field>
-            <Field label="우편번호" error={errors.postalCode}>
+            <Field label={t("addrPostal")} error={errors.postalCode}>
               <input value={draft.postalCode} onChange={(event) => setDraft({ ...draft, postalCode: event.target.value })} inputMode="numeric" className={fieldClass} aria-invalid={Boolean(errors.postalCode)} />
             </Field>
-            <Field label="기본 배송지 설정" error={errors.defaultChoice}>
+            <Field label={t("addrDefaultSetting")} error={errors.defaultChoice}>
               <select
                 value={lockDefault ? "O" : draft.defaultChoice}
                 disabled={lockDefault}
@@ -172,32 +197,30 @@ export function AddressBook() {
                 className={fieldClass}
                 aria-invalid={Boolean(errors.defaultChoice)}
               >
-                <option value="">선택해 주세요</option>
+                <option value="">{t("addrChoose")}</option>
                 <option value="O">O</option>
                 <option value="X">X</option>
               </select>
             </Field>
-            <Field label="주소" error={errors.address} wide>
+            <Field label={t("addrAddress")} error={errors.address} wide>
               <input value={draft.address} onChange={(event) => setDraft({ ...draft, address: event.target.value })} className={fieldClass} aria-invalid={Boolean(errors.address)} />
             </Field>
-            <Field label="상세주소" error={errors.detail} wide>
+            <Field label={t("addrDetail")} error={errors.detail} wide>
               <input value={draft.detail} onChange={(event) => setDraft({ ...draft, detail: event.target.value })} className={fieldClass} aria-invalid={Boolean(errors.detail)} />
             </Field>
           </div>
           <p className="mt-3 text-xs leading-5 text-slate-400">
-            {lockDefault
-              ? "첫 배송지이거나 남은 주소가 하나뿐이면 자동으로 기본 배송지가 됩니다."
-              : "기본 배송지는 항상 1개입니다. 기본 배송지는 다른 주소를 기본으로 바꾼 뒤에만 삭제할 수 있어요."}
+            {lockDefault ? t("addrLock") : t("addrDefaultRule")}
           </p>
           <div className="mt-4 flex gap-2">
-            <button type="submit" className={primaryButtonClass}>{editingId ? "저장" : "등록"}</button>
-            <button type="button" onClick={closeForm} className={ghostButtonClass}>취소</button>
+            <button type="submit" className={primaryButtonClass}>{editingId ? t("addrSave") : t("addrCreate")}</button>
+            <button type="button" onClick={closeForm} className={ghostButtonClass}>{t("cancel")}</button>
           </div>
         </form>
       ) : null}
 
       {addresses.length === 0 ? (
-        <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-400">등록된 배송지가 없어요.</p>
+        <p className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-400">{t("addrEmpty")}</p>
       ) : (
         <ul className="mt-4 grid gap-3">
           {addresses.map((item) => (
@@ -207,9 +230,9 @@ export function AddressBook() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-slate-900">{item.name}</p>
                     {item.isDefault ? (
-                      <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white">기본 배송지</span>
+                      <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white">{t("addrDefault")}</span>
                     ) : (
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">기본 배송지 아님</span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">{t("addrNotDefault")}</span>
                     )}
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{item.phone}</p>
@@ -219,12 +242,12 @@ export function AddressBook() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {item.isDefault ? null : (
-                    <button type="button" onClick={() => { setDefaultAddress(item.id); notify("기본 배송지를 변경했어요."); }} className={ghostButtonClass}>
-                      기본 배송지로 변경
+                    <button type="button" onClick={() => { setDefaultAddress(item.id); notify(t("addrChanged")); }} className={ghostButtonClass}>
+                      {t("addrMakeDefault")}
                     </button>
                   )}
-                  <button type="button" onClick={() => openEdit(item)} className={ghostButtonClass}>수정</button>
-                  <button type="button" onClick={() => askRemove(item)} className={ghostButtonClass}>삭제</button>
+                  <button type="button" onClick={() => openEdit(item)} className={ghostButtonClass}>{t("addrEdit")}</button>
+                  <button type="button" onClick={() => askRemove(item)} className={ghostButtonClass}>{t("addrDelete")}</button>
                 </div>
               </div>
             </li>

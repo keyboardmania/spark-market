@@ -258,6 +258,17 @@ export function addReview(review: Review) {
   emit({ ...state, reviews: [review, ...state.reviews] });
 }
 
+/** Drops the review from shared state so admin and public lists no longer render it. */
+export function removeReview(id: string) {
+  const base = purgeExpired(state);
+  if (!base.reviews.some((review) => review.id === id)) return;
+  emit({
+    ...base,
+    reviews: base.reviews.filter((review) => review.id !== id),
+    deletions: base.deletions.filter((item) => !(item.kind === "리뷰" && item.id === id)),
+  });
+}
+
 export function addFaq(faq: Faq) {
   emit({ ...state, faqs: [faq, ...state.faqs] });
 }

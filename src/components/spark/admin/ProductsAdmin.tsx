@@ -8,10 +8,11 @@ import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { DataTable, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { useShared, type LiveReport } from "@/data/shared";
+import { DELETE_BLOCKED_MESSAGE, productDeleteBlock } from "@/features/trade/productGuards";
 
 export function ProductsAdmin() {
   const { categories, addCategory, updateCategory, deleteCategory } = useAdmin();
-  const { products, softDeleteProduct } = useSpark();
+  const { products, rooms, orders, softDeleteProduct } = useSpark();
   const shared = useShared();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"전체" | SaleStatus | "금지/신고">("전체");
@@ -63,7 +64,7 @@ export function ProductsAdmin() {
 
       <Panel
         title="등록 매물"
-        description={`${visible.length}개 표시 · 예약중 상품은 삭제할 수 없고, 신고 수락이 3회를 넘으면 자동으로 내려갑니다.`}
+        description={`${visible.length}개 표시 · 예약 중이거나 거래가 진행 중인 상품은 상태를 바꾼 뒤에만 삭제할 수 있어요.`}
         flush
       >
         <DataTable>
@@ -83,7 +84,7 @@ export function ProductsAdmin() {
               const flag = flagged.get(product.id);
               const seller = sellerAccount(product.sellerId);
               const strikes = acceptedStrikes(shared.reports, product.id);
-              const reserved = product.saleStatus === "예약중";
+              const block = productDeleteBlock(product, rooms, orders);
               return (
                 <tr key={product.id}>
                   <td className={tdClass}>
@@ -108,16 +109,20 @@ export function ProductsAdmin() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (reserved) {
-                          setNotice("예약중인 상품은 삭제할 수 없어요.");
+                        if (block) {
+                          setNotice(DELETE_BLOCKED_MESSAGE);
                           return;
                         }
-                        softDeleteProduct(product.id);
+                        const removed = softDeleteProduct(product.id);
+                        if (!removed) {
+                          setNotice(DELETE_BLOCKED_MESSAGE);
+                          return;
+                        }
                         setNotice(`${product.title} 매물을 삭제했어요. 데이터는 남고 사진·동영상은 3개월 후 삭제됩니다.`);
                       }}
-                      className={reserved ? "rounded-full px-3 py-1.5 text-xs text-slate-400" : flag || strikes > 3 ? "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700" : "rounded-full px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"}
+                      className={block ? "rounded-full px-3 py-1.5 text-xs text-slate-400" : flag || strikes > 3 ? "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700" : "rounded-full px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"}
                     >
-                      {reserved ? "삭제 불가" : flag ? `${flag.flag} 매물 삭제` : "삭제"}
+                      {block ? "삭제 불가" : flag ? `${flag.flag} 매물 삭제` : "삭제"}
                     </button>
                   </td>
                 </tr>

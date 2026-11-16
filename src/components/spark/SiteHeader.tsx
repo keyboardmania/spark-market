@@ -6,6 +6,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CATEGORY_ROUTES, categoryHref, formatPrice, type AppNotification, type SparkUser } from "@/data/mockData";
 import { LOCALES, translate } from "@/i18n";
+import { roomInInbox } from "@/features/chat/rooms";
+import { WireframeBanner } from "@/features/wireframe/WireframeBanner";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 
@@ -20,7 +22,7 @@ export function SiteHeader() {
   const [suggesting, setSuggesting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
-  const unread = rooms.reduce((sum, room) => sum + room.unread, 0);
+  const unread = rooms.filter(roomInInbox).reduce((sum, room) => sum + room.unread, 0);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -59,6 +61,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-md">
+      <WireframeBanner />
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-14 items-center gap-2 overflow-x-auto">
           <Link href="/" className="flex shrink-0 items-end gap-1.5" aria-label="Spark 홈">
@@ -71,22 +74,24 @@ export function SiteHeader() {
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            <Link href="/sell" className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500 px-3.5 py-2 text-[13px] font-semibold leading-none text-white shadow-sm hover:bg-rose-600">
-              {t("sell")}
-            </Link>
-            <NotificationBell
-              label={t("notifications")}
-              open={noticeOpen}
-              onOpenChange={setNoticeOpen}
-              notifications={notifications}
-              onRead={markNotificationRead}
-              onReadAll={markAllNotificationsRead}
-              onRemove={removeNotification}
-              onClear={clearNotifications}
-            />
-            <IconLink href="/chat" label={t("chat")} badge={unread} />
             {sessionUser ? (
-              <ProfileMenu key={pathname} user={sessionUser} onSignOut={signOut} labels={{ mypage: t("mypage"), orders: t("orders"), logout: t("logout") }} />
+              <>
+                <Link href="/sell" className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500 px-3.5 py-2 text-[13px] font-semibold leading-none text-white shadow-sm hover:bg-rose-600">
+                  {t("sell")}
+                </Link>
+                <NotificationBell
+                  label={t("notifications")}
+                  open={noticeOpen}
+                  onOpenChange={setNoticeOpen}
+                  notifications={notifications}
+                  onRead={markNotificationRead}
+                  onReadAll={markAllNotificationsRead}
+                  onRemove={removeNotification}
+                  onClear={clearNotifications}
+                />
+                <IconLink href="/chat" label={t("chat")} badge={unread} />
+                <ProfileMenu key={pathname} user={sessionUser} onSignOut={signOut} labels={{ mypage: t("mypage"), orders: t("orders"), logout: t("logout") }} />
+              </>
             ) : (
               <>
                 <Link href="/login" className="inline-flex whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-600 hover:bg-slate-50">
@@ -150,14 +155,16 @@ export function SiteHeader() {
                 ))}
               </select>
             </label>
-            <MenuLink href="/sell">{t("sell")}</MenuLink>
-            <MenuLink href="/orders">{t("orders")}</MenuLink>
-            <MenuLink href="/chat">{t("chat")}</MenuLink>
-            <MenuLink href="/mypage">{t("mypage")}</MenuLink>
             {sessionUser ? (
-              <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
-                {t("logout")}
-              </button>
+              <>
+                <MenuLink href="/sell">{t("sell")}</MenuLink>
+                <MenuLink href="/orders">{t("orders")}</MenuLink>
+                <MenuLink href="/chat">{t("chat")}</MenuLink>
+                <MenuLink href="/mypage">{t("mypage")}</MenuLink>
+                <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
+                  {t("logout")}
+                </button>
+              </>
             ) : (
               <>
                 <MenuLink href="/login">{t("login")}</MenuLink>
@@ -302,7 +309,7 @@ function ProfileMenu({
       <p className="truncate px-4 py-2 text-xs text-slate-400">{user.email}</p>
       <ProfileLink href="/mypage" onPick={() => setOpen(false)}>{labels.mypage}</ProfileLink>
       <ProfileLink href="/orders" onPick={() => setOpen(false)}>{labels.orders}</ProfileLink>
-      <ProfileLink href="/selling" onPick={() => setOpen(false)}>판매 관리</ProfileLink>
+      <ProfileLink href="/orders?tab=sale" onPick={() => setOpen(false)}>판매 내역</ProfileLink>
       <ProfileLink href="/mypage/wishlist" onPick={() => setOpen(false)}>찜한 상품</ProfileLink>
       <ProfileLink href="/chat" onPick={() => setOpen(false)}>채팅</ProfileLink>
       <ProfileLink href="/support" onPick={() => setOpen(false)}>고객센터</ProfileLink>

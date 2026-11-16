@@ -4,9 +4,11 @@ import Link from "next/link";
 import { CATEGORY_ROUTES, categoryHref } from "@/data/mockData";
 import { translate } from "@/i18n";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { useI18n } from "@/features/i18n/useI18n";
 
 export function SiteFooter() {
   const { locale } = useSpark();
+  const { t: ui } = useI18n();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   return (
     <footer className="mt-16 border-t border-slate-100 bg-slate-50/50">
@@ -14,7 +16,7 @@ export function SiteFooter() {
         <div>
           <p className="font-serif text-3xl tracking-[-0.04em] text-slate-900">Spark</p>
           <p className="mt-3 max-w-xs text-sm leading-6 text-slate-500">
-            취향과 수집품이 머무는 프리미엄 C2C.
+            {ui("footerTagline")}
           </p>
         </div>
         <div>

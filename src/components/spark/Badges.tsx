@@ -1,4 +1,8 @@
+"use client";
+
 import type { Condition, SaleStatus } from "@/data/mockData";
+import { useI18n } from "@/features/i18n/useI18n";
+import { statusLabel } from "@/features/i18n/ui";
 
 const CONDITION_CLASS: Record<Condition, string> = {
   PSA10: "bg-stone-100 text-stone-700",
@@ -33,5 +37,6 @@ export function SparkVipBadge() {
 }
 
 export function SaleStatusText({ status }: { status: SaleStatus }) {
-  return <span className={`text-xs font-medium ${STATUS_CLASS[status]}`}>{status}</span>;
+  const { t } = useI18n();
+  return <span className={`text-xs font-medium ${STATUS_CLASS[status]}`}>{statusLabel(t, status)}</span>;
 }

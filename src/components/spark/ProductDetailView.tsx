@@ -8,16 +8,19 @@ import { SaleStatusText } from "@/components/spark/Badges";
 import { ProductInquiry } from "@/components/spark/ChatScreen";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { DeleteProductButton } from "@/components/spark/SellForm";
+import { SaleStatusMenu } from "@/components/spark/SaleStatusMenu";
 import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { ReportButton } from "@/components/spark/ReportDialog";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import { roomInInbox } from "@/features/chat/rooms";
+import { saleStatusLabel } from "@/features/trade/productGuards";
 import { useShared } from "@/data/shared";
 
 export function ProductDetailView({ id, initialProduct }: { id: string; initialProduct: Product | null }) {
   const router = useRouter();
   const mounted = useMounted();
-  const { products, user, wishlistIds, toggleWishlist, ensureRoom, startPurchase, rooms, isProductDeleted } = useSpark();
+  const { products, user, wishlistIds, toggleWishlist, ensureRoom, startPurchase, rooms, isProductDeleted, tradeRole, updateProduct, notify } = useSpark();
   const sharedReviews = useShared().reviews;
   const deleted = mounted && isProductDeleted(id);
   const live = products.find((product) => product.id === id);
@@ -43,9 +46,10 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
   const sellerName = seller.id === "me" && user ? user.name : seller.name;
   const wished = mounted && wishlistIds.includes(product.id);
   const mine = product.sellerId === "me";
-  const saleRoom = mine ? rooms.find((room) => room.productId === product.id) : undefined;
+  const saleRoom = rooms.find((room) => room.productId === product.id);
   const sold = product.saleStatus === "판매완료";
   const reserved = product.saleStatus === "예약중";
+  const actingAsBuyer = tradeRole === "buyer";
 
   return (
     <div className="mx-auto grid max-w-6xl gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
@@ -56,7 +60,17 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
           {[product.category, product.country].filter(Boolean).join(" · ")}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <SaleStatusText status={product.saleStatus} />
+          {mine ? (
+            <SaleStatusMenu
+              status={product.saleStatus}
+              onChange={(next) => {
+                const updated = updateProduct(product.id, { saleStatus: next });
+                if (updated) notify(`판매 상태를 ${saleStatusLabel(next)} 바꿨어요. 가격과 내용을 이어서 수정할 수 있어요.`);
+              }}
+            />
+          ) : (
+            <SaleStatusText status={product.saleStatus} />
+          )}
           <span className="text-xs text-slate-400">{product.postedLabel}</span>
         </div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">{product.title}</h1>
@@ -90,7 +104,7 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
           <p className="mt-2 text-xs text-slate-400">{seller.city} · 프로필 보기</p>
         </Link>
 
-        {mine && saleRoom?.messages.some((message) => message.originalText && message.translatedText) ? (
+        {mine && saleRoom && roomInInbox(saleRoom) ? (
           <div className="mt-6">
             <ProductInquiry productId={product.id} />
           </div>
@@ -106,24 +120,18 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
         ) : null}
 
         <div className="mt-6 flex flex-wrap gap-2">
-          {mine && saleRoom ? (
-            <Link href={`/chat/${saleRoom.id}`} className={ghostButtonClass}>
-              구매자 채팅
-            </Link>
-          ) : (
-            <button
-              type="button"
-              className={ghostButtonClass}
-              onClick={() => {
-                const roomId = ensureRoom(product);
-                if (!roomId) return;
-                router.push(`/chat/${roomId}`);
-              }}
-            >
-              1:1 채팅
-            </button>
-          )}
-          {mine || sold ? null : (
+          <button
+            type="button"
+            className={ghostButtonClass}
+            onClick={() => {
+              const roomId = ensureRoom(product);
+              if (!roomId) return;
+              router.push(`/chat/${roomId}`);
+            }}
+          >
+            1:1 채팅
+          </button>
+          {actingAsBuyer && !sold ? (
             <button
               type="button"
               className={primaryButtonClass}
@@ -133,15 +141,15 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
                 router.push(`/chat/${roomId}`);
               }}
             >
-              구매하기
+              구매신청하기
             </button>
-          )}
+          ) : null}
         </div>
-        {mine || sold ? null : (
+        {actingAsBuyer && !sold ? (
           <p className="mt-3 text-xs leading-5 text-slate-400">
-            구매하기를 누르면 채팅이 열립니다. 판매중인 상품은 판매자에게 수락 요청이 전송되고, 수락되면 그 채팅에서 결제합니다.
+            구매신청은 채팅으로 전달됩니다. 상단에서 판매자 롤로 바꾸면 정산 계좌와 발송지를 확인한 뒤 승인할 수 있어요.
           </p>
-        )}
+        ) : null}
         <div className="mt-3 flex gap-4">
           <button type="button" onClick={() => toggleWishlist(product.id)} className="text-sm text-slate-500 underline-offset-4 hover:underline">
             {wished ? "찜 해제" : "찜하기"}

@@ -5,10 +5,10 @@ import { settlementOf } from "@/data/mockData";
 import { useSpark } from "@/components/spark/SparkProvider";
 
 export function useSellerPayout(roomId: string) {
-  const { rooms, products, addresses, banks, user, decidePurchase } = useSpark();
+  const { rooms, products, addresses, banks, user, decidePurchase, tradeRole } = useSpark();
   const room = rooms.find((item) => item.id === roomId) ?? null;
   const product = room ? products.find((item) => item.id === room.productId) ?? null : null;
-  const isSeller = product?.sellerId === "me";
+  const isSeller = tradeRole === "seller";
   const defaultAddress = addresses.find((item) => item.isDefault)?.id ?? addresses[0]?.id ?? "";
   const defaultAccount = banks.find((item) => item.isDefault)?.id ?? banks[0]?.id ?? "";
   const [addressId, setAddressId] = useState(defaultAddress);
@@ -25,13 +25,14 @@ export function useSellerPayout(roomId: string) {
 
   const payout = useMemo(
     () => (product ? settlementOf(product.price, user?.membership === "vip" && isSeller) : null),
-    [product, user?.membership, isSeller],
+    [isSeller, product, user?.membership],
   );
 
   function confirm() {
-    if (!isSeller || !addressId || !accountId) return;
-    decidePurchase(roomId, true);
+    if (!isSeller || !addressId || !accountId) return false;
+    decidePurchase(roomId, true, { addressId, accountId });
     setSaved(true);
+    return true;
   }
 
   return {
