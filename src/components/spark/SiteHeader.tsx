@@ -308,13 +308,14 @@ function ProfileMenu({
       className="fixed z-50 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-xl"
       style={{ top: pos.top, right: pos.right }}
     >
-      <p className="truncate px-4 py-2 text-xs text-slate-400">{user.email}</p>
+      <p className="truncate px-4 py-3 text-sm font-medium text-slate-900">{user.name}</p>
       <ProfileLink href="/mypage" onPick={() => setOpen(false)}>{labels.mypage}</ProfileLink>
+      <ProfileLink href="/mypage/products" onPick={() => setOpen(false)}>{t("menuProducts")}</ProfileLink>
       <ProfileLink href="/orders?tab=buy" onPick={() => setOpen(false)}>{t("menuPurchases")}</ProfileLink>
       <ProfileLink href="/orders?tab=sale" onPick={() => setOpen(false)}>{t("menuSales")}</ProfileLink>
-      <ProfileLink href="/mypage/wishlist" onPick={() => setOpen(false)}>찜한 상품</ProfileLink>
-      <ProfileLink href="/chat" onPick={() => setOpen(false)}>채팅</ProfileLink>
-      <ProfileLink href="/support" onPick={() => setOpen(false)}>고객센터</ProfileLink>
+      <ProfileLink href="/favorites" onPick={() => setOpen(false)}>{t("menuFavorites")}</ProfileLink>
+      <ProfileLink href="/chat" onPick={() => setOpen(false)}>{t("menuChat")}</ProfileLink>
+      <ProfileLink href="/support" onPick={() => setOpen(false)}>{t("menuSupport")}</ProfileLink>
       <button type="button" role="menuitem" onClick={onSignOut} className="block w-full px-4 py-2.5 text-left text-sm text-slate-500 hover:bg-slate-50">
         {labels.logout}
       </button>

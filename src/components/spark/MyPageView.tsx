@@ -15,9 +15,10 @@ import { useShared } from "@/data/shared";
 const NEXT_MEMBERSHIP_DATE = "2026.12.16";
 
 const TRADE_LINKS = [
+  { href: "/mypage/products", label: "내 상품 관리", hint: "수정, 삭제, 상태" },
   { href: "/orders?tab=buy", label: "구매 내역", hint: "결제, 배송, 구매확정" },
   { href: "/orders?tab=sale", label: "판매 내역", hint: "수락, 배송, 정산" },
-  { href: "/mypage/wishlist", label: "찜한 상품", hint: "관심 매물" },
+  { href: "/favorites", label: "찜한 상품", hint: "관심 매물" },
   { href: "/mypage/reviews", label: "내 리뷰", hint: "작성한 후기" },
   { href: "/chat", label: "1:1 채팅", hint: "거래 대화" },
 ] as const;

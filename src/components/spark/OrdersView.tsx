@@ -7,7 +7,7 @@ import { formatPrice, type Order, type OrderStatus } from "@/data/mockData";
 import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { SalesManageView } from "@/components/spark/SalesManageView";
 import { ProductVisual } from "@/components/spark/ProductVisual";
-import { ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useI18n } from "@/features/i18n/useI18n";
 import { statusLabel } from "@/features/i18n/ui";
@@ -120,11 +120,10 @@ export function OrdersView() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">구매/판매 내역</h1>
           <p className="mt-2 text-sm text-slate-500">
             {tab === "sale"
-              ? "진행 중인 주문은 상세로, 판매중·예약중·판매완료 글은 수정 화면으로 이동해요."
+              ? "주문 상세에서 정산과 통관 기록을 확인해요."
               : "카드를 누르면 주문 상세로 이동해요. 구매확정과 배송 조회만 목록에서 바로 할 수 있어요."}
           </p>
         </div>
-        {tab === "sale" ? <Link href="/sell" className={ghostButtonClass}>상품 등록</Link> : null}
       </div>
       <div className="mt-6 flex gap-2" role="tablist" aria-label="내역 구분">
         {(

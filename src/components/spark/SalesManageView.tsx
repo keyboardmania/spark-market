@@ -13,15 +13,12 @@ import {
   type Order,
   type OrderStatus,
   type Product,
-  type SaleStatus,
 } from "@/data/mockData";
 import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
-import { SaleStatusMenu } from "@/components/spark/SaleStatusMenu";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
-import { saleStatusLabel } from "@/features/trade/productGuards";
 
 const FILTERS = [
   { id: "ALL", label: "전체" },
@@ -34,8 +31,7 @@ type SaleFilter = (typeof FILTERS)[number]["id"];
 
 type DeskItem =
   | { key: string; kind: "request"; roomId: string; product: Product; buyer: string }
-  | { key: string; kind: "order"; order: Order }
-  | { key: string; kind: "listing"; product: Product };
+  | { key: string; kind: "order"; order: Order };
 
 const TONE: Record<string, string> = {
   판매중: "bg-emerald-50 text-emerald-700",
@@ -75,7 +71,7 @@ export function SalesManageView() {
   const mounted = useMounted();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { products, orders, rooms, user, updateOrder, updateProduct, decidePurchase, notify } = useSpark();
+  const { products, orders, rooms, user, updateOrder, decidePurchase, notify } = useSpark();
   const [acceptRoomId, setAcceptRoomId] = useState<string | null>(null);
   const [shipOrder, setShipOrder] = useState<Order | null>(null);
   const [trackOrder, setTrackOrder] = useState<Order | null>(null);
@@ -141,10 +137,6 @@ export function SalesManageView() {
                   product={item.kind === "order" ? products.find((product) => product.id === item.order.productId) : undefined}
                   onAccept={setAcceptRoomId}
                   onReject={(roomId) => decidePurchase(roomId, false)}
-                  onStatus={(product, next) => {
-                    const updated = updateProduct(product.id, { saleStatus: next });
-                    if (updated) notify(`판매 상태를 ${saleStatusLabel(next)} 바꿨어요. 가격과 내용을 이어서 수정할 수 있어요.`);
-                  }}
                   onShip={setShipOrder}
                   onTrack={setTrackOrder}
                 />
@@ -174,27 +166,17 @@ function collectItems(
     return [{ key: `request-${room.id}`, kind: "request" as const, roomId: room.id, product, buyer: room.buyerName || room.sellerName }];
   });
   const saleOrders = orders.filter((order) => order.role === "sale");
-  const busy = new Set<string>([
-    ...requests.flatMap((item) => (item.kind === "request" ? [item.product.id] : [])),
-    ...saleOrders.filter((order) => order.status !== "구매확정" && order.status !== "거래취소").map((order) => order.productId),
-  ]);
-  const listings: DeskItem[] = products
-    .filter((product) => product.sellerId === "me" && !busy.has(product.id))
-    .map((product) => ({ key: `listing-${product.id}`, kind: "listing" as const, product }));
   const all: DeskItem[] = [
     ...requests,
     ...saleOrders.map((order) => ({ key: `order-${order.id}`, kind: "order" as const, order })),
-    ...listings,
   ];
   if (filter === "ALL") return all;
   return all.filter((item) => itemPhase(item) === filter);
 }
 
-function itemPhase(item: DeskItem): SaleFilter | "LISTING" {
+function itemPhase(item: DeskItem): SaleFilter {
   if (item.kind === "request") return "OPEN";
-  if (item.kind === "order") return orderPhase(item.order.status);
-  if (item.product.saleStatus === "판매완료") return "DONE";
-  return "LISTING";
+  return orderPhase(item.order.status);
 }
 
 function emptyLabel(filter: SaleFilter) {
@@ -206,8 +188,7 @@ function emptyLabel(filter: SaleFilter) {
 
 function cardHref(item: DeskItem) {
   if (item.kind === "order") return `/orders/${item.order.id}`;
-  if (item.kind === "request") return `/chat/${item.roomId}`;
-  return `/sell/${item.product.id}`;
+  return `/chat/${item.roomId}`;
 }
 
 function DeskCard({
@@ -216,7 +197,6 @@ function DeskCard({
   vip,
   onAccept,
   onReject,
-  onStatus,
   onShip,
   onTrack,
 }: {
@@ -225,7 +205,6 @@ function DeskCard({
   vip: boolean;
   onAccept: (roomId: string) => void;
   onReject: (roomId: string) => void;
-  onStatus: (product: Product, status: SaleStatus) => void;
   onShip: (order: Order) => void;
   onTrack: (order: Order) => void;
 }) {
@@ -235,7 +214,7 @@ function DeskCard({
   const motif = item.kind === "order" ? item.order.motif : item.product.motif;
   const palette = item.kind === "order" ? item.order.palette : item.product.palette;
   const uid = item.kind === "order" ? item.order.id : item.product.id;
-  const badge = item.kind === "order" ? item.order.status : item.kind === "request" ? "수락 대기" : item.product.saleStatus;
+  const badge = item.kind === "order" ? item.order.status : "수락 대기";
   const price = item.kind === "order" ? item.order.price : item.product.price;
   const money = order ? settlementOf(order.itemPrice ?? order.price, vip) : null;
   const payout = order?.payoutAmount ?? money?.payoutAmount ?? 0;
@@ -251,13 +230,7 @@ function DeskCard({
       />
       <ProductVisual motif={motif} palette={palette} uid={uid} imageUrl={imageUrl} alt="" className="aspect-square w-full" />
       <div className="flex flex-1 flex-col gap-2 p-3">
-        {item.kind === "listing" ? (
-          <div className="relative z-20 w-fit">
-            <SaleStatusMenu status={item.product.saleStatus} onChange={(next) => onStatus(item.product, next)} />
-          </div>
-        ) : (
-          <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE[badge] ?? "bg-slate-100 text-slate-600"}`}>{badge}</span>
-        )}
+        <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE[badge] ?? "bg-slate-100 text-slate-600"}`}>{badge}</span>
         <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 group-hover:underline">{title}</h2>
         <p className="text-sm font-semibold tabular-nums text-slate-900">{formatPrice(price)}</p>
         {item.kind === "request" ? <p className="text-xs text-slate-500">구매자 {item.buyer}</p> : null}
@@ -267,7 +240,6 @@ function DeskCard({
             {settlement ? ` · ${settlement} ${formatPrice(payout)}` : ""}
           </p>
         ) : null}
-        {item.kind === "listing" ? <p className="text-xs text-slate-500">{item.product.category}</p> : null}
         <CardActions item={item} onAccept={onAccept} onReject={onReject} onShip={onShip} onTrack={onTrack} />
       </div>
     </article>
