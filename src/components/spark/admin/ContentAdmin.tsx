@@ -98,7 +98,7 @@ function ContentDesk({
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("계정");
+  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("회원");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<"일반" | "정책변경" | "사기예방">("일반");

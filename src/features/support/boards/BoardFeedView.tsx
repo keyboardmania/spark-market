@@ -6,6 +6,7 @@ import { FAQ_CATEGORIES, INQUIRY_TYPES, type InquiryType, type NoticeCategory } 
 import { useShared } from "@/data/shared";
 import { fieldClass, primaryButtonClass } from "@/components/spark/styles";
 import { WireframeFrame } from "@/features/wireframe/WireframeFrame";
+import { PhotoAttachButton } from "@/features/support/inquiries/PhotoAttachButton";
 import { PHOTO_ATTACHMENT_LIMIT, PHOTO_ATTACHMENT_LIMIT_MESSAGE, submitInquiry, useInquiries, type InquiryPhoto } from "@/features/support/inquiries/inquiryStore";
 
 const NOTICE_FILTERS = ["전체", "일반", "정책변경", "사기예방"] as const;
@@ -149,33 +150,24 @@ function InquiryDesk() {
         <label className="block space-y-2 text-xs text-slate-500">내용
           <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={4} className={fieldClass} />
         </label>
-        <label className="flex flex-col gap-2 text-xs text-slate-500">사진 첨부 (최대 {PHOTO_ATTACHMENT_LIMIT}장)
-          <input
-            type="file"
-            accept="image/png,image/jpeg"
-            multiple
-            onChange={(event) => {
-              const files = event.target.files;
-              if (!files || files.length === 0) {
-                setPhotos([]);
-                setPhotoError("");
-                return;
-              }
-              if (files.length > PHOTO_ATTACHMENT_LIMIT) {
-                setPhotos([]);
-                setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
-                event.target.value = "";
-                return;
-              }
-              const selected = Array.from(files);
-              Promise.all(selected.map((file) => readPhoto(file))).then((next) => {
-                setPhotos(next);
-                setPhotoError("");
-              });
-            }}
-            className="block text-sm"
-          />
-        </label>
+        <PhotoAttachButton
+          onFiles={(files) => {
+            if (files.length === 0) {
+              setPhotos([]);
+              setPhotoError("");
+              return;
+            }
+            if (files.length > PHOTO_ATTACHMENT_LIMIT) {
+              setPhotos([]);
+              setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
+              return;
+            }
+            Promise.all(files.map((file) => readPhoto(file))).then((next) => {
+              setPhotos(next);
+              setPhotoError("");
+            });
+          }}
+        />
         {photoError ? <p role="alert" className="text-sm text-rose-600">{photoError}</p> : null}
         {photos.length > 0 ? (
           <ul className="flex flex-wrap gap-2">

@@ -21,12 +21,10 @@ export function SiteHeader() {
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const [query, setQuery] = useState("");
   const [suggesting, setSuggesting] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const unread = rooms.filter(roomInInbox).reduce((sum, room) => sum + room.unread, 0);
 
   useEffect(() => {
-    setMenuOpen(false);
     setNoticeOpen(false);
     setSuggesting(false);
     const keyword = pathname === "/search" ? new URLSearchParams(window.location.search).get("q") ?? "" : "";
@@ -74,7 +72,7 @@ export function SiteHeader() {
             <SearchField id="spark-search-desktop" label={t("search")} placeholder={t("searchPlaceholder")} empty={t("empty")} query={query} suggestionsOpen={suggesting} onChange={changeQuery} onSubmit={submitSearch} results={results} onSelect={(id) => router.push(`/products/${id}`)} />
           </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             {sessionUser ? (
               <>
                 <Link href="/sell" className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-rose-500 px-3.5 py-2 text-[13px] font-semibold leading-none text-white shadow-sm hover:bg-rose-600">
@@ -103,7 +101,7 @@ export function SiteHeader() {
                 </Link>
               </>
             )}
-            <label className="hidden shrink-0 items-center text-xs text-slate-400 lg:inline-flex">
+            <label className="inline-flex shrink-0 items-center text-xs text-slate-400">
               <span className="sr-only">{t("language")}</span>
               <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} className="rounded-full bg-transparent px-1.5 py-1.5 text-[13px] text-slate-700">
                 {LOCALES.map((item) => (
@@ -111,15 +109,6 @@ export function SiteHeader() {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-slate-700 hover:bg-slate-50 lg:hidden"
-              aria-expanded={menuOpen}
-              aria-label={t("menu")}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <MenuIcon />
-            </button>
           </div>
         </div>
 
@@ -145,36 +134,6 @@ export function SiteHeader() {
         </nav>
       </div>
 
-      {menuOpen ? (
-        <div className="border-t border-slate-100 bg-white px-4 py-3 lg:hidden">
-          <div className="mx-auto grid max-w-6xl gap-1">
-            <label className="px-3 py-2 text-sm text-slate-500">
-              {t("language")}
-              <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} className="ml-2 rounded-full bg-slate-50 px-2 py-1">
-                {LOCALES.map((item) => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-            {sessionUser ? (
-              <>
-                <MenuLink href="/sell">{t("sell")}</MenuLink>
-                <MenuLink href="/orders">{t("orders")}</MenuLink>
-                <MenuLink href="/chat">{t("chat")}</MenuLink>
-                <MenuLink href="/mypage">{t("mypage")}</MenuLink>
-                <button type="button" onClick={signOut} className="rounded-xl px-3 py-3 text-left text-sm text-slate-500">
-                  {t("logout")}
-                </button>
-              </>
-            ) : (
-              <>
-                <MenuLink href="/login">{t("login")}</MenuLink>
-                <MenuLink href="/signup">{t("signup")}</MenuLink>
-              </>
-            )}
-          </div>
-        </div>
-      ) : null}
     </header>
   );
 }
@@ -508,14 +467,6 @@ function NotificationBell({
   );
 }
 
-function MenuLink({ href, children }: { href: string; children: string }) {
-  return (
-    <Link href={href} className="rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50">
-      {children}
-    </Link>
-  );
-}
-
 function DismissIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" aria-hidden>
@@ -550,10 +501,3 @@ function BellIcon() {
   );
 }
 
-function MenuIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-      <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}

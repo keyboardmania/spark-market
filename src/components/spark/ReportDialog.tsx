@@ -4,6 +4,7 @@ import { useState } from "react";
 import { submitReport, type LiveReport } from "@/data/shared";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
+import { PhotoAttachButton } from "@/features/support/inquiries/PhotoAttachButton";
 import { PHOTO_ATTACHMENT_LIMIT, PHOTO_ATTACHMENT_LIMIT_MESSAGE } from "@/features/support/inquiries/inquiryStore";
 
 const LABELS: Record<LiveReport["targetType"], string> = {
@@ -70,27 +71,21 @@ export function ReportButton({
               <span className="text-xs text-slate-500">내용</span>
               <textarea value={body} onChange={(event) => setBody(event.target.value)} rows={4} className={fieldClass} />
             </label>
-            <label className="mt-3 block space-y-2">
-              <span className="text-xs text-slate-500">사진 최대 {PHOTO_ATTACHMENT_LIMIT}장</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg"
-                multiple
-                onChange={(event) => {
-                  const count = event.target.files?.length ?? 0;
-                  if (count > PHOTO_ATTACHMENT_LIMIT) {
+            <div className="mt-3 space-y-2">
+              <PhotoAttachButton
+                onFiles={(files) => {
+                  if (files.length > PHOTO_ATTACHMENT_LIMIT) {
                     setPhotos(0);
                     setPhotoError(PHOTO_ATTACHMENT_LIMIT_MESSAGE);
-                    event.target.value = "";
                     return;
                   }
-                  setPhotos(count);
+                  setPhotos(files.length);
                   setPhotoError("");
                 }}
               />
-              {photoError ? <span role="alert" className="block text-xs text-rose-600">{photoError}</span> : null}
-              {photos > 0 ? <span className="block text-xs text-slate-400">{photos}장 선택</span> : null}
-            </label>
+              {photoError ? <p role="alert" className="text-xs text-rose-600">{photoError}</p> : null}
+              {photos > 0 ? <p className="text-xs text-slate-400">{photos}장 선택</p> : null}
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={close} className={ghostButtonClass}>닫기</button>
               <button type="submit" disabled={!body.trim()} className={primaryButtonClass}>접수</button>
