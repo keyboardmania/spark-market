@@ -32,7 +32,7 @@ import {
 } from "@/data/mockData";
 import type { LocaleId } from "@/i18n";
 import { UI, fill } from "@/features/i18n/ui";
-import { applyRetentionPolicy, getShared, useShared } from "@/data/shared";
+import { applyRetentionPolicy, getShared, openDispute, useShared } from "@/data/shared";
 import { cloneChatRooms, dropRoom } from "@/features/chat/rooms";
 import { pendingPurchaseRooms, productDeleteBlock } from "@/features/trade/productGuards";
 import { WIREFRAME_ADDRESSES, WIREFRAME_BANKS, WIREFRAME_LOGIN } from "@/features/wireframe/demoProfile";
@@ -183,7 +183,7 @@ type SparkContextValue = {
   orders: Order[];
   placeOrder: (order: Order) => void;
   updateOrder: (id: string, patch: Partial<Order>) => void;
-  requestCancel: (id: string, reason: string, detail: string) => void;
+  requestCancel: (id: string, reason: string, detail: string) => "cancel" | "dispute" | "ignored";
   rooms: ChatRoom[];
   typingRoomId: string | null;
   activeChatRoomId: string | null;
@@ -194,7 +194,7 @@ type SparkContextValue = {
   startPurchase: (product: Product) => string | null;
   requestPurchase: (roomId: string) => void;
   sendMessage: (roomId: string, message: ChatDraft, extras?: ChatDraft[]) => void;
-  decidePurchase: (roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => void;
+  decidePurchase: (roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => string | null;
   completePurchase: (roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => string | null;
   markRead: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
@@ -305,7 +305,7 @@ function expireCancelRequests(orders: Order[], now = Date.now()) {
   let changed = false;
   const next = orders.map((order) => {
     const request = order.cancelRequest;
-    if (!request || request.autoCancelled || order.status === "거래취소") return order;
+    if (!request || request.autoCancelled || request.channel === "dispute" || order.status === "거래취소") return order;
     const requestedAt = new Date(request.requestedAt).getTime();
     if (Number.isNaN(requestedAt) || requestedAt + CANCEL_WINDOW_MS > now) return order;
     changed = true;
@@ -677,11 +677,25 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
   }, []);
 
   const requestCancel = useCallback((id: string, reason: string, detail: string) => {
-    setOrders((current) => {
-      const target = current.find((order) => order.id === id);
-      if (!target || target.cancelRequest) return current;
-      if (target.status !== "결제완료" && target.status !== "배송완료") return current;
-      return current.map((order) =>
+    const target = orders.find((order) => order.id === id);
+    if (!target || target.cancelRequest) return "ignored" as const;
+    if (target.status !== "결제완료" && target.status !== "배송완료") return "ignored" as const;
+    const dispute = target.status === "배송완료";
+    if (dispute) {
+      const buyer = target.role === "purchase" ? user?.name ?? "구매자" : target.counterpart;
+      const seller = target.role === "sale" ? user?.name ?? "판매자" : target.counterpart;
+      openDispute({
+        orderId: target.id,
+        productId: target.productId,
+        title: target.title,
+        buyer,
+        seller,
+        reason,
+        detail,
+      });
+    }
+    setOrders((current) =>
+      current.map((order) =>
         order.id === id
           ? {
               ...order,
@@ -689,12 +703,14 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
                 reason,
                 detail,
                 requestedAt: new Date().toISOString(),
+                channel: dispute ? "dispute" : "cancel",
               },
             }
           : order,
-      );
-    });
-  }, []);
+      ),
+    );
+    return dispute ? "dispute" as const : "cancel" as const;
+  }, [orders, user?.name]);
 
   useEffect(() => {
     setOrders((current) => expireCancelRequests(current));
@@ -870,16 +886,16 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
   const decidePurchase = useCallback((roomId: string, accept: boolean, settlement?: { addressId: string; accountId: string }) => {
     if (tradeRole !== "seller") {
       notify(UI[locale].sellerRoleNeed);
-      return;
+      return null;
     }
     const room = rooms.find((item) => item.id === roomId);
     const product = room ? records.find((item) => item.id === room.productId && !item.deletedAt) : undefined;
-    if (!room || !product || room.purchase?.status !== "대기") return;
+    if (!room || !product || room.purchase?.status !== "대기") return null;
     const address = addresses.find((item) => item.id === settlement?.addressId);
     const account = banks.find((item) => item.id === settlement?.accountId);
     if (accept && (!address || !account)) {
       notify(UI[locale].settlementNeed);
-      return;
+      return null;
     }
     const vip = Boolean(user?.membership === "vip");
     const money = settlementOf(product.price, vip);
@@ -941,6 +957,7 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
       }),
     );
     notify(accept ? UI[locale].payRequestSent : UI[locale].payRejectedToast);
+    return accept ? roomId : null;
   }, [addresses, banks, locale, notify, records, rooms, tradeRole, user?.membership]);
 
   const completePurchase = useCallback((roomId: string, payment: { address: string; customsNumber: string; paymentMethod: string }) => {

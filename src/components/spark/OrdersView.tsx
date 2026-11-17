@@ -16,7 +16,7 @@ import { useMounted } from "@/components/spark/useMounted";
 const BUY_STATUS_FILTERS = [
   { id: "ALL", label: "전체" },
   { id: "OPEN", label: "거래 진행 중" },
-  { id: "DONE", label: "거래 완료/정산" },
+  { id: "DONE", label: "거래 완료" },
   { id: "CANCELLED", label: "거래 취소" },
 ] as const;
 

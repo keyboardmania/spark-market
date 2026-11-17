@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SparkVipBadge } from "@/components/spark/Badges";
 import { ProductCard } from "@/components/spark/ProductCard";
-import { fieldClass, ghostButtonClass } from "@/components/spark/styles";
+import { ghostButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 import { SANCTIONS, SELLERS, type SparkUser } from "@/data/mockData";
@@ -17,9 +17,10 @@ const NEXT_MEMBERSHIP_DATE = "2026.12.16";
 const TRADE_LINKS = [
   { href: "/mypage/products", label: "내 상품 관리", hint: "수정, 삭제, 상태" },
   { href: "/orders?tab=buy", label: "구매 내역", hint: "결제, 배송, 구매확정" },
-  { href: "/orders?tab=sale", label: "판매 내역", hint: "수락, 배송, 정산" },
+  { href: "/orders?tab=sale", label: "판매 내역", hint: "배송, 거래완료" },
   { href: "/favorites", label: "찜한 상품", hint: "관심 매물" },
-  { href: "/mypage/reviews", label: "내 리뷰", hint: "작성한 후기" },
+  { href: "/sellers/me", label: "내 상점", hint: "판매 상품과 후기" },
+  { href: "/mypage/reviews", label: "받은 리뷰", hint: "내가 받은 후기" },
   { href: "/chat", label: "1:1 채팅", hint: "거래 대화" },
 ] as const;
 
@@ -49,8 +50,6 @@ export function MyPageView() {
   const { user, logout, wishlistIds, orders, updateProfile } = useSpark();
   const reviews = useShared().reviews;
   const photoRef = useRef<HTMLInputElement>(null);
-  const [nameOpen, setNameOpen] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
   const [profileError, setProfileError] = useState("");
   const purchaseCount = mounted ? orders.filter((order) => order.role === "purchase").length : 0;
   const saleCount = mounted ? orders.filter((order) => order.role === "sale").length : 0;
@@ -62,30 +61,19 @@ export function MyPageView() {
   const signedIn = mounted && Boolean(user);
   const nextPayment = user?.membership === "vip" ? NEXT_MEMBERSHIP_DATE : "구독 없음";
 
-  function saveName() {
-    const next = nameDraft.trim();
-    if (!next) {
-      setProfileError("닉네임을 입력해 주세요.");
-      return;
-    }
-    if (!updateProfile({ name: next })) {
-      setProfileError("닉네임을 저장하지 못했어요.");
-      return;
-    }
-    setNameOpen(false);
-    setProfileError("");
-  }
-
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <section className="rounded-2xl bg-slate-50/80 p-6">
+      <section className="relative rounded-2xl bg-slate-50/80 p-6">
+        {signedIn ? (
+          <Link href="/mypage/profile" aria-label="회원 정보 수정" className="absolute inset-0 z-10 rounded-2xl" />
+        ) : null}
         <div className="flex items-center gap-4">
           {signedIn ? (
             <button
               type="button"
               aria-label="프로필 사진 변경"
               onClick={() => photoRef.current?.click()}
-              className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full"
+              className="relative z-20 h-16 w-16 shrink-0 overflow-hidden rounded-full"
             >
               <Avatar name={user?.name ?? "S"} photoUrl={user?.photoUrl} />
               <span className="absolute inset-x-0 bottom-0 bg-slate-900/60 py-0.5 text-[10px] font-medium text-white">변경</span>
@@ -114,48 +102,22 @@ export function MyPageView() {
           />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] tracking-[0.22em] text-slate-400">MY</p>
-            {signedIn && nameOpen ? (
-              <form className="mt-1 flex items-center gap-2" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
-                <input
-                  value={nameDraft}
-                  onChange={(event) => setNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") setNameOpen(false);
-                  }}
-                  autoFocus
-                  aria-label="닉네임"
-                  className={`${fieldClass} h-10`}
-                />
-                <button type="submit" className="shrink-0 text-sm font-medium text-slate-900">저장</button>
-                <button type="button" onClick={() => setNameOpen(false)} className="shrink-0 text-sm text-slate-400">취소</button>
-              </form>
-            ) : (
-              <div className="mt-1 flex items-center gap-1.5">
-                <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900">
-                  {signedIn ? user?.name : "마이페이지"}
-                </h1>
-                {signedIn ? (
-                  <button
-                    type="button"
-                    aria-label="닉네임 수정"
-                    onClick={() => {
-                      setNameDraft(user?.name ?? "");
-                      setProfileError("");
-                      setNameOpen(true);
-                    }}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-slate-400 hover:bg-white hover:text-slate-900"
-                  >
-                    <PencilIcon />
-                  </button>
-                ) : null}
-              </div>
-            )}
+            <div className="mt-1 flex items-center gap-1.5">
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-slate-900">
+                {signedIn ? user?.name : "마이페이지"}
+              </h1>
+              {signedIn ? (
+                <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-slate-400">
+                  <PencilIcon />
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 truncate text-sm text-slate-500">
               {signedIn ? `${user?.email} · ${providerLabel(user?.provider ?? "email")}` : "로그인하면 거래와 설정이 이 계정에 모여요."}
             </p>
             {signedIn ? (
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">평균 별점 ★ {rating.toFixed(1)}</span>
+                <Link href="/sellers/me?tab=reviews" className="relative z-20 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">평균 별점 ★ {rating.toFixed(1)}</Link>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">다음 결제 예정일 {nextPayment}</span>
               </div>
             ) : null}
@@ -180,7 +142,7 @@ export function MyPageView() {
                 logout();
                 router.push("/");
               }}
-              className={ghostButtonClass}
+              className={`relative z-20 ${ghostButtonClass}`}
             >
               로그아웃
             </button>

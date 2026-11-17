@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import type { BoardRecord } from "@/features/admin-boards/model";
 
 export function BoardList({
@@ -11,9 +12,12 @@ export function BoardList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const page = useAdminPage(boards.length, boards.map((board) => board.id).join(","));
+  const rows = boards.slice(page.start, page.start + page.pageSize);
   return (
+    <>
     <ul className="flex flex-col">
-      {boards.map((board) => (
+      {rows.map((board) => (
         <li key={board.id} className={board.id === selectedId ? "bg-slate-50" : undefined}>
           <button type="button" onClick={() => onSelect(board.id)} className="flex w-full flex-col gap-1 px-5 py-3 text-left">
             <span className="text-xs text-slate-400">{board.category}{board.used ? "" : " · 미사용"}</span>
@@ -29,5 +33,7 @@ export function BoardList({
         </li>
       ))}
     </ul>
+    <AdminPager page={page.page} pageCount={page.pageCount} total={page.total} pageSize={page.pageSize} onPage={page.setPage} />
+    </>
   );
 }

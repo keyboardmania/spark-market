@@ -16,6 +16,7 @@ import {
   type Notice,
   type ReportCategory,
   type ReportMedia,
+  type DisputeCase,
   type Review,
   type TermVersion,
 } from "@/data/mockData";
@@ -54,6 +55,7 @@ type SharedState = {
   deletedProductIds: string[];
   purgedProductIds: string[];
   deletions: RetentionRecord[];
+  disputes: DisputeCase[];
 };
 
 const SANCTION_AT = 4;
@@ -124,6 +126,7 @@ let state: SharedState = {
     deletedAt: PRODUCT_SANCTION_AT,
     hardDeleteAt: hardDeleteAtFrom(PRODUCT_SANCTION_AT),
   })),
+  disputes: [],
 };
 
 const listeners = new Set<() => void>();
@@ -253,6 +256,18 @@ function purgeExpired(source: SharedState, now = Date.now()): SharedState {
 export function applyRetentionPolicy() {
   const next = purgeExpired(state);
   if (next !== state) emit(next);
+}
+
+export function openDispute(input: Omit<DisputeCase, "id" | "openedAt" | "status">) {
+  if (state.disputes.some((item) => item.orderId === input.orderId)) return state.disputes.find((item) => item.orderId === input.orderId) ?? null;
+  const dispute: DisputeCase = {
+    ...input,
+    id: `dsp-${input.orderId}`,
+    openedAt: new Date().toISOString(),
+    status: "접수",
+  };
+  emit({ ...state, disputes: [dispute, ...state.disputes] });
+  return dispute;
 }
 
 export function addReview(review: Review) {

@@ -342,6 +342,20 @@ export type CancelRequest = {
   detail: string;
   requestedAt: string;
   autoCancelled?: boolean;
+  channel?: "cancel" | "dispute";
+};
+
+export type DisputeCase = {
+  id: string;
+  orderId: string;
+  productId: string;
+  title: string;
+  buyer: string;
+  seller: string;
+  reason: string;
+  detail: string;
+  openedAt: string;
+  status: "접수";
 };
 
 export type Order = {

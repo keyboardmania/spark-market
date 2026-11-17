@@ -6,6 +6,7 @@ import { SaleStatusText } from "@/components/spark/Badges";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { useShared, type LiveReport } from "@/data/shared";
 import { DELETE_BLOCKED_MESSAGE, productDeleteBlock } from "@/features/trade/productGuards";
@@ -32,6 +33,8 @@ export function ProductsAdmin() {
     if (status === "금지/신고") return isRestricted(product.id, flagged, shared.reports);
     return product.saleStatus === status;
   });
+  const productPage = useAdminPage(visible.length, `${query}:${status}`);
+  const productRows = visible.slice(productPage.start, productPage.start + productPage.pageSize);
 
   return (
     <div className="space-y-6">
@@ -80,7 +83,7 @@ export function ProductsAdmin() {
             </tr>
           </thead>
           <tbody>
-            {visible.map((product) => {
+            {productRows.map((product) => {
               const flag = flagged.get(product.id);
               const seller = sellerAccount(product.sellerId);
               const strikes = acceptedStrikes(shared.reports, product.id);
@@ -137,6 +140,7 @@ export function ProductsAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={productPage.page} pageCount={productPage.pageCount} total={productPage.total} pageSize={productPage.pageSize} onPage={productPage.setPage} />
       </Panel>
 
       <Panel title="카테고리" description="추가, 이름 수정, 삭제가 목록에 바로 반영됩니다.">

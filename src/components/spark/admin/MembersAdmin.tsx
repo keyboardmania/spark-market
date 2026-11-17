@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { releaseUserSuspension, useShared, type LiveReport } from "@/data/shared";
 import { formatLocalStamp, type AdminMember, type MembershipStatus } from "@/data/mockData";
@@ -31,6 +32,8 @@ export function MembersAdmin() {
       return sort === "asc" ? stamp : -stamp;
     });
   const selected = members.find((member) => member.id === selectedId) ?? null;
+  const memberPage = useAdminPage(shown.length, `${query}:${membership}:${activityFilter}:${sort}`);
+  const memberRows = shown.slice(memberPage.start, memberPage.start + memberPage.pageSize);
 
   return (
     <div className="space-y-6">
@@ -75,7 +78,7 @@ export function MembersAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((member) => {
+            {memberRows.map((member) => {
               const activity = activityOf(member, shared.suspendedUntil);
               return (
                 <tr key={member.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedId(member.id)}>
@@ -113,6 +116,7 @@ export function MembersAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={memberPage.page} pageCount={memberPage.pageCount} total={memberPage.total} pageSize={memberPage.pageSize} onPage={memberPage.setPage} />
       </Panel>
       {selected ? (
         <MemberDetail

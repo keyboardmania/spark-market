@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 
 export function OperatorsAdmin() {
@@ -10,6 +11,8 @@ export function OperatorsAdmin() {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const shown = admins.filter((admin) => !needle || `${admin.name} ${admin.email} ${admin.role}`.toLowerCase().includes(needle));
+  const operatorPage = useAdminPage(shown.length, query);
+  const operatorRows = shown.slice(operatorPage.start, operatorPage.start + operatorPage.pageSize);
 
   return (
     <div className="space-y-6">
@@ -29,7 +32,7 @@ export function OperatorsAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((admin) => (
+            {operatorRows.map((admin) => (
               <tr key={admin.id}>
                 <td className={`${tdClass} font-medium text-slate-900`}>{admin.name}</td>
                 <td className={tdClass}>{admin.email}</td>
@@ -48,6 +51,7 @@ export function OperatorsAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={operatorPage.page} pageCount={operatorPage.pageCount} total={operatorPage.total} pageSize={operatorPage.pageSize} onPage={operatorPage.setPage} />
       </Panel>
     </div>
   );

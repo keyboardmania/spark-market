@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ADMIN_TRADE_STATUSES, SETTLEMENT_STATUSES, formatPrice, getProductById, type AdminTrade, type AdminTradeStatus } from "@/data/mockData";
 import { useAdmin } from "@/components/spark/AdminProvider";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { fieldClass } from "@/components/spark/styles";
 import { DataTable, DetailModal, DetailRows, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
+import { useShared } from "@/data/shared";
 
-const PHASES = ["진행 중", "구매 확정", "취소"] as const;
+const PHASES = ["진행 중", "구매 확정", "취소", "분쟁"] as const;
 type TradePhase = (typeof PHASES)[number];
 
 export function TradesAdmin() {
   const { trades, setTradeStatus, settlements, approveSettlement } = useAdmin();
+  const disputes = useShared().disputes;
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"전체" | TradePhase>("전체");
@@ -29,6 +32,19 @@ export function TradesAdmin() {
     .slice()
     .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
   const waiting = shownSettlements.filter((item) => item.status === "정산대기").length;
+  const tradePage = useAdminPage(shown.length, `${email}:${status}`);
+  const tradeRows = shown.slice(tradePage.start, tradePage.start + tradePage.pageSize);
+  const settlePage = useAdminPage(shownSettlements.length, `${settleEmail}:${settleStatus}`);
+  const settleRows = shownSettlements.slice(settlePage.start, settlePage.start + settlePage.pageSize);
+  const disputePage = useAdminPage(disputes.length, "disputes");
+  const disputeRows = disputes.slice(disputePage.start, disputePage.start + disputePage.pageSize);
+
+  useEffect(() => {
+    for (const dispute of disputes) {
+      const trade = trades.find((item) => item.id === dispute.orderId && item.status !== "분쟁" && item.status !== "거래취소");
+      if (trade) setTradeStatus(trade.id, "분쟁");
+    }
+  }, [disputes, setTradeStatus, trades]);
 
   return (
     <div className="space-y-6">
@@ -48,6 +64,38 @@ export function TradesAdmin() {
           ))}
         </select>
       </div>
+      <Panel title="분쟁" description="배송 완료 후 취소는 이 목록으로 자동 접수됩니다. 관리자가 상태를 분쟁으로 바꾸지 않아도 여기 쌓입니다." flush>
+        <DataTable>
+          <thead>
+            <tr>
+              <th className={thClass}>주문</th>
+              <th className={thClass}>상품</th>
+              <th className={thClass}>구매자</th>
+              <th className={thClass}>판매자</th>
+              <th className={thClass}>사유</th>
+              <th className={thClass}>상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {disputeRows.map((dispute) => (
+              <tr key={dispute.id}>
+                <td className={tdClass}>{dispute.orderId}</td>
+                <td className={`${tdClass} font-medium text-slate-900`}>{dispute.title}</td>
+                <td className={tdClass}>{dispute.buyer}</td>
+                <td className={tdClass}>{dispute.seller}</td>
+                <td className={tdClass}>{dispute.reason}</td>
+                <td className={tdClass}><StatusPill tone="amber">{dispute.status}</StatusPill></td>
+              </tr>
+            ))}
+            {disputes.length === 0 ? (
+              <tr>
+                <td className={`${tdClass} text-slate-400`} colSpan={6}>접수된 분쟁이 없어요.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </DataTable>
+        <AdminPager page={disputePage.page} pageCount={disputePage.pageCount} total={disputePage.total} pageSize={disputePage.pageSize} onPage={disputePage.setPage} />
+      </Panel>
       <Panel title="거래 내역" description="행을 누르면 상품, 결제, 주소, 정산 정보를 볼 수 있어요." flush>
         <DataTable>
           <thead>
@@ -61,7 +109,7 @@ export function TradesAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((trade) => {
+            {tradeRows.map((trade) => {
               const phase = tradePhase(trade.status);
               return (
                 <tr key={trade.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedId(trade.id)}>
@@ -96,6 +144,7 @@ export function TradesAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={tradePage.page} pageCount={tradePage.pageCount} total={tradePage.total} pageSize={tradePage.pageSize} onPage={tradePage.setPage} />
       </Panel>
       {selected ? (
         <TradeDetail
@@ -134,7 +183,7 @@ export function TradesAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shownSettlements.map((item) => (
+            {settleRows.map((item) => (
               <tr key={item.id}>
                 <td className={tdClass}>
                   <span className="block font-medium text-slate-900">{item.seller}</span>
@@ -175,6 +224,7 @@ export function TradesAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={settlePage.page} pageCount={settlePage.pageCount} total={settlePage.total} pageSize={settlePage.pageSize} onPage={settlePage.setPage} />
       </Panel>
     </div>
   );
@@ -223,5 +273,6 @@ function TradeDetail({ trade, onClose, onStatus }: { trade: AdminTrade; onClose:
 function tradePhase(status: AdminTradeStatus): TradePhase {
   if (status === "구매확정") return "구매 확정";
   if (status === "거래취소") return "취소";
+  if (status === "분쟁") return "분쟁";
   return "진행 중";
 }

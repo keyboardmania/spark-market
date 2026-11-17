@@ -1,9 +1,15 @@
+"use client";
+
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import type { AlarmHistoryRecord } from "@/features/admin-alarms/model";
 
 export function AlarmHistoryList({ history }: { history: AlarmHistoryRecord[] }) {
+  const page = useAdminPage(history.length, history.map((item) => item.id).join(","));
+  const rows = history.slice(page.start, page.start + page.pageSize);
   return (
+    <>
     <ul className="flex flex-col">
-      {history.map((item) => (
+      {rows.map((item) => (
         <li key={item.id} className="flex flex-col gap-1 border-t border-slate-100 px-5 py-3 text-sm">
           <span className="text-xs text-slate-400">{item.sentAt} · {item.userName}</span>
           <span className="font-medium text-slate-900">{item.title}</span>
@@ -11,5 +17,7 @@ export function AlarmHistoryList({ history }: { history: AlarmHistoryRecord[] })
         </li>
       ))}
     </ul>
+    <AdminPager page={page.page} pageCount={page.pageCount} total={page.total} pageSize={page.pageSize} onPage={page.setPage} />
+    </>
   );
 }

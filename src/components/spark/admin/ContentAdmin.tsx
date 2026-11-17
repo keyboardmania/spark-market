@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { FAQ_CATEGORIES } from "@/data/mockData";
 import { addFaq, addNotice, addTerm, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
@@ -14,6 +15,8 @@ export function ContentAdmin() {
   const [reply, setReply] = useState("");
   const [notice, setNotice] = useState("");
   const selected = inquiries.find((item) => item.id === selectedId) ?? null;
+  const inquiryPage = useAdminPage(inquiries.length, "inquiries");
+  const inquiryRows = inquiries.slice(inquiryPage.start, inquiryPage.start + inquiryPage.pageSize);
 
   return (
     <div className="space-y-6">
@@ -33,7 +36,7 @@ export function ContentAdmin() {
               </tr>
             </thead>
             <tbody>
-              {inquiries.map((item) => (
+              {inquiryRows.map((item) => (
                 <tr key={item.id} className={item.id === selectedId ? "bg-slate-50" : undefined}>
                   <td className={tdClass}>
                     <button type="button" className="text-left" onClick={() => { setSelectedId(item.id); setReply(item.reply); }}>
@@ -52,6 +55,7 @@ export function ContentAdmin() {
               ))}
             </tbody>
           </DataTable>
+          <AdminPager page={inquiryPage.page} pageCount={inquiryPage.pageCount} total={inquiryPage.total} pageSize={inquiryPage.pageSize} onPage={inquiryPage.setPage} />
         </Panel>
         <Panel title="답변 작성" description={selected ? selected.member : "문의를 선택해 주세요."}>
           {selected ? (
@@ -104,6 +108,14 @@ function ContentDesk({
   const [category, setCategory] = useState<"일반" | "정책변경" | "사기예방">("일반");
   const [termTitle, setTermTitle] = useState("");
   const [termBody, setTermBody] = useState("");
+  const liveFaqs = faqs.filter((item) => !item.deletedAt);
+  const liveNotices = notices.filter((item) => !item.deletedAt);
+  const faqPage = useAdminPage(liveFaqs.length, "faqs");
+  const noticePage = useAdminPage(liveNotices.length, "notices");
+  const termPage = useAdminPage(terms.length, "terms");
+  const faqRows = liveFaqs.slice(faqPage.start, faqPage.start + faqPage.pageSize);
+  const noticeRows = liveNotices.slice(noticePage.start, noticePage.start + noticePage.pageSize);
+  const termRows = terms.slice(termPage.start, termPage.start + termPage.pageSize);
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Panel title="FAQ" description="최신순으로 보이고, 삭제는 숨김 처리입니다.">
@@ -123,13 +135,14 @@ function ContentDesk({
           <button type="submit" className={primaryButtonClass}>FAQ 추가</button>
         </form>
         <ul className="mt-4 space-y-2">
-          {faqs.filter((item) => !item.deletedAt).map((item) => (
+          {faqRows.map((item) => (
             <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
               <span>{item.question}</span>
               <button type="button" className={ghostButtonClass} onClick={() => softDeleteFaq(item.id)}>삭제</button>
             </li>
           ))}
         </ul>
+        <AdminPager page={faqPage.page} pageCount={faqPage.pageCount} total={faqPage.total} pageSize={faqPage.pageSize} onPage={faqPage.setPage} />
       </Panel>
       <Panel title="공지" description="삭제는 숨김 처리입니다.">
         <form className="space-y-2" onSubmit={(event) => {
@@ -150,13 +163,14 @@ function ContentDesk({
           <button type="submit" className={primaryButtonClass}>공지 추가</button>
         </form>
         <ul className="mt-4 space-y-2">
-          {notices.filter((item) => !item.deletedAt).map((item) => (
+          {noticeRows.map((item) => (
             <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
               <span>{item.category} · {item.title}</span>
               <button type="button" className={ghostButtonClass} onClick={() => softDeleteNotice(item.id)}>삭제</button>
             </li>
           ))}
         </ul>
+        <AdminPager page={noticePage.page} pageCount={noticePage.pageCount} total={noticePage.total} pageSize={noticePage.pageSize} onPage={noticePage.setPage} />
       </Panel>
       <Panel title="약관" description="약관은 추가만 할 수 있습니다.">
         <form className="space-y-2" onSubmit={(event) => {
@@ -172,8 +186,9 @@ function ContentDesk({
           <button type="submit" className={primaryButtonClass}>약관 추가</button>
         </form>
         <ul className="mt-4 space-y-2 text-sm text-slate-600">
-          {terms.map((item) => <li key={item.id}>{item.createdAt} · {item.title}</li>)}
+          {termRows.map((item) => <li key={item.id}>{item.createdAt} · {item.title}</li>)}
         </ul>
+        <AdminPager page={termPage.page} pageCount={termPage.pageCount} total={termPage.total} pageSize={termPage.pageSize} onPage={termPage.setPage} />
       </Panel>
     </div>
   );

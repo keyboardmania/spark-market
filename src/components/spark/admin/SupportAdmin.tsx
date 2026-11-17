@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { acceptReport, isReportClosed, rejectReport, reportCategory, reportTimestamp, reviewReport, useShared, type LiveReport } from "@/data/shared";
 
@@ -29,6 +30,8 @@ export function SupportAdmin() {
     .slice()
     .sort((a, b) => (sort === "asc" ? reportTimestamp(a.createdAt) - reportTimestamp(b.createdAt) : reportTimestamp(b.createdAt) - reportTimestamp(a.createdAt)));
   const selected = shared.reports.find((report) => report.id === selectedId) ?? null;
+  const reportPage = useAdminPage(shown.length, `${query}:${filter}:${sort}`);
+  const reportRows = shown.slice(reportPage.start, reportPage.start + reportPage.pageSize);
 
   return (
     <div className="space-y-6">
@@ -67,7 +70,7 @@ export function SupportAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((report) => (
+            {reportRows.map((report) => (
               <tr key={report.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedId(report.id)}>
                 <td className={tdClass}>{report.category}</td>
                 <td className={tdClass}>{report.reporter}</td>
@@ -99,6 +102,7 @@ export function SupportAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={reportPage.page} pageCount={reportPage.pageCount} total={reportPage.total} pageSize={reportPage.pageSize} onPage={reportPage.setPage} />
       </Panel>
       {selected ? (
         <ReportDetail

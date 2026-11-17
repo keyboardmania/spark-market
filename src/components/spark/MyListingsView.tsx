@@ -52,16 +52,18 @@ export function MyListingsView() {
           <ul className="mt-8 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
             {visible.map((product) => (
               <li key={product.id}>
-                <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <Link href={`/products/${product.id}`} aria-label={product.title} className="absolute inset-0 z-10 rounded-2xl" />
                   <ProductVisual motif={product.motif} palette={product.palette} uid={product.id} imageUrl={product.imageUrl} alt="" className="aspect-square w-full" />
                   <div className="flex flex-1 flex-col gap-2 p-3">
-                    <SaleStatusMenu status={product.saleStatus} onChange={(next) => changeStatus(product, next)} />
+                    <div className="relative z-20 w-fit">
+                      <SaleStatusMenu status={product.saleStatus} onChange={(next) => changeStatus(product, next)} />
+                    </div>
                     <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900">{product.title}</h2>
                     <p className="text-sm font-semibold tabular-nums text-slate-900">{formatPrice(product.price)}</p>
                     <p className="text-xs text-slate-500">{product.category}</p>
-                    <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
+                    <div className="relative z-20 mt-auto flex flex-wrap gap-1.5 pt-1">
                       <Link href={`/sell/${product.id}`} className={miniGhost}>{t("listingsEdit")}</Link>
-                      <Link href={`/products/${product.id}`} className={miniGhost}>{t("listingsDetail")}</Link>
                       <DeleteProductButton product={product} variant="text" />
                     </div>
                   </div>

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertsPanel } from "@/components/spark/AlertsPanel";
+import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { passwordIssue } from "@/components/spark/AuthScreens";
+import { ProductVisual } from "@/components/spark/ProductVisual";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
-import { BANK_LIMIT, TEST_VERIFICATION_CODE } from "@/data/mockData";
+import { BANK_LIMIT, TEST_VERIFICATION_CODE, getProductById } from "@/data/mockData";
 import { useI18n } from "@/features/i18n/useI18n";
 import { fill } from "@/features/i18n/ui";
 import { QuickFill } from "@/features/wireframe/QuickFill";
@@ -685,22 +687,78 @@ export function WithdrawPanel() {
 
 export { AlertsPanel };
 
+const RECEIVED_REVIEW_PAGE = 5;
+
 export function ReviewsPanel() {
-  const { user } = useSpark();
-  const reviews = useShared().reviews.filter((review) => !review.deletedAt && review.author === user?.name);
+  const mounted = useMounted();
+  const { user, products } = useSpark();
+  const { t } = useI18n();
+  const reviews = useShared().reviews.filter((review) => !review.deletedAt && review.sellerId === "me");
+  const scroll = useInfiniteGrid(reviews.length, reviews.map((review) => review.id).join(","), RECEIVED_REVIEW_PAGE);
+  const visible = reviews.slice(0, scroll.visibleCount);
+  const average = reviews.length === 0 ? 0 : reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+  if (!mounted) return null;
   if (!user) return <LoginHint />;
   return (
     <section>
-      <h2 className="text-lg font-semibold text-slate-900">내 리뷰</h2>
-      {reviews.length === 0 ? <p className="mt-3 text-sm text-slate-400">작성한 리뷰가 없어요.</p> : (
-        <ul className="mt-3 space-y-2">
-          {reviews.map((review) => (
-            <li key={review.id} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm">
-              <p className="text-slate-800">{"★".repeat(review.rating)} {review.text}</p>
-              <p className="mt-1 text-xs text-slate-400">사진·동영상 보관 만료 {review.mediaExpiresAt}</p>
-            </li>
-          ))}
-        </ul>
+      <h2 className="text-lg font-semibold text-slate-900">{t("receivedReviews")}</h2>
+      <p className="mt-2 text-sm text-slate-700">
+        {fill(t("reviewSummaryCount"), { count: String(reviews.length) })}
+        {" · "}
+        {fill(t("reviewSummaryAverage"), { score: average.toFixed(1) })}
+      </p>
+      {reviews.length === 0 ? <p className="mt-3 text-sm text-slate-400">{t("shopReviewsEmpty")}</p> : (
+        <>
+          <ul className="mt-3 flex flex-col gap-2">
+            {visible.map((review) => {
+              const product = products.find((item) => item.id === review.productId) ?? getProductById(review.productId);
+              return (
+                <li key={review.id} className="rounded-2xl border border-slate-200 px-3 py-3 text-sm sm:px-4">
+                  <div className="flex gap-3">
+                    {product ? (
+                      <Link
+                        href={`/products/${product.id}`}
+                        className="relative block h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200"
+                        aria-label={product.title}
+                      >
+                        <ProductVisual
+                          motif={product.motif}
+                          palette={product.palette}
+                          uid={`review-${review.id}`}
+                          imageUrl={product.imageUrl}
+                          alt=""
+                          className="h-full w-full"
+                        />
+                      </Link>
+                    ) : (
+                      <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-slate-100 text-xs text-slate-400 ring-1 ring-slate-200">
+                        —
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-xs text-slate-400">{review.author}</p>
+                        <span className="text-sm tracking-tight text-amber-500" aria-label={`${review.rating}`}>
+                          {"★".repeat(review.rating)}
+                          <span className="text-slate-200">{"★".repeat(Math.max(0, 5 - review.rating))}</span>
+                        </span>
+                        <time className="text-xs text-slate-400">{review.createdAt}</time>
+                      </div>
+                      {product ? (
+                        <Link href={`/products/${product.id}`} className="mt-1 block truncate text-xs font-medium text-slate-600 underline-offset-4 hover:underline">
+                          {product.title}
+                        </Link>
+                      ) : null}
+                      <p className="mt-1 leading-6 text-slate-800">{review.text}</p>
+                      <p className="mt-1 text-xs text-slate-400">사진·동영상 보관 만료 {review.mediaExpiresAt}</p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <InfiniteSentinel active={scroll.hasMore} sentinelRef={scroll.sentinelRef} />
+        </>
       )}
     </section>
   );

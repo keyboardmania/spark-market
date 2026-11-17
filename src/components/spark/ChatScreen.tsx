@@ -509,6 +509,7 @@ function TradeActions({
 }
 
 function ApprovePurchaseDialog({ roomId, onClose }: { roomId: string; onClose: () => void }) {
+  const router = useRouter();
   const payout = useSellerPayout(roomId);
   const { t } = useI18n();
 
@@ -534,8 +535,10 @@ function ApprovePurchaseDialog({ roomId, onClose }: { roomId: string; onClose: (
             className={`${primaryButtonClass} flex-1`}
             disabled={!payout.addressId || !payout.accountId || !payout.isSeller}
             onClick={() => {
-              payout.confirm();
+              const linked = payout.confirm();
+              if (!linked) return;
               onClose();
+              router.push(`/chat/${linked}`);
             }}
           >
             {t("chatApproveSend")}

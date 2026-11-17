@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ADMIN_MEMBERS, ADMIN_TRADES, formatPrice, formatRetentionDate, getProductById, type Review } from "@/data/mockData";
 import { fieldClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { removeReview, useShared } from "@/data/shared";
 
@@ -28,6 +29,8 @@ export function ReviewsAdmin() {
     .slice()
     .sort((a, b) => (sort === "desc" ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
   const selected = shown.find((review) => review.id === selectedId) ?? null;
+  const reviewPage = useAdminPage(shown.length, `${query}:${rating}:${sort}`);
+  const reviewRows = shown.slice(reviewPage.start, reviewPage.start + reviewPage.pageSize);
 
   function deleteReview(id: string) {
     removeReview(id);
@@ -71,7 +74,7 @@ export function ReviewsAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.map((review) => {
+            {reviewRows.map((review) => {
               const author = reviewAuthor(review);
               return (
                 <tr key={review.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedId(review.id)}>
@@ -121,6 +124,7 @@ export function ReviewsAdmin() {
             ) : null}
           </tbody>
         </DataTable>
+        <AdminPager page={reviewPage.page} pageCount={reviewPage.pageCount} total={reviewPage.total} pageSize={reviewPage.pageSize} onPage={reviewPage.setPage} />
       </Panel>
       {selected ? <ReviewDetail review={selected} onClose={() => setSelectedId(null)} onDelete={deleteReview} /> : null}
     </div>

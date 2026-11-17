@@ -29,10 +29,11 @@ export function useSellerPayout(roomId: string) {
   );
 
   function confirm() {
-    if (!isSeller || !addressId || !accountId) return false;
-    decidePurchase(roomId, true, { addressId, accountId });
+    if (!isSeller || !addressId || !accountId) return null;
+    const linked = decidePurchase(roomId, true, { addressId, accountId });
+    if (!linked) return null;
     setSaved(true);
-    return true;
+    return linked;
   }
 
   return {

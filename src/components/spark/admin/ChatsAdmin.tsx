@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass } from "@/components/spark/styles";
+import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { useShared } from "@/data/shared";
 import {
@@ -45,6 +46,8 @@ export function ChatsAdmin() {
     })
     .slice()
     .sort((a, b) => (sort === "desc" ? roomStamp(b) - roomStamp(a) : roomStamp(a) - roomStamp(b)));
+  const chatPage = useAdminPage(shown.length, `${query}:${activity}:${sort}`);
+  const chatRows = shown.slice(chatPage.start, chatPage.start + chatPage.pageSize);
   const selected = catalog.find((room) => room.id === selectedId) ?? null;
 
   return (
@@ -83,7 +86,7 @@ export function ChatsAdmin() {
               </tr>
             </thead>
             <tbody>
-              {shown.map((room) => {
+              {chatRows.map((room) => {
                 const product = getProductById(room.productId);
                 const party = partiesOf(room, product);
                 const state = room.activity ?? "활성";
@@ -129,6 +132,7 @@ export function ChatsAdmin() {
               ) : null}
             </tbody>
           </DataTable>
+          <AdminPager page={chatPage.page} pageCount={chatPage.pageCount} total={chatPage.total} pageSize={chatPage.pageSize} onPage={chatPage.setPage} />
         </Panel>
         <Panel title={selected ? "대화 타임라인" : "대화"} description={selected ? "텍스트, 사진, 동영상을 시간순으로 확인합니다." : "채팅방을 선택하면 대화가 열려요."}>
           {selected ? (

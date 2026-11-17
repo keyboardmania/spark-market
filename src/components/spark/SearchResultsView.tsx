@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  CATEGORIES,
   ORIGINS,
   PRODUCTS,
   SALE_STATUSES,
   compareByPopularity,
   createdAtRank,
+  type Category,
   type Origin,
   type Product,
   type SaleStatus,
@@ -15,6 +17,7 @@ import {
 import { ProductCard } from "@/components/spark/ProductCard";
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
+import { useI18n } from "@/features/i18n/useI18n";
 
 const SORTS = [
   { id: "new", label: "최신순" },
@@ -27,32 +30,44 @@ type SortId = (typeof SORTS)[number]["id"];
 
 export function SearchResultsView() {
   const searchParams = useSearchParams();
+  const { t } = useI18n();
   const keyword = (searchParams.get("q") ?? "").trim();
   const { products, wishlistIds } = useSpark();
   const mounted = useMounted();
   const source = mounted ? products : PRODUCTS;
   const wishedIds = useMemo(() => new Set(mounted ? wishlistIds : []), [mounted, wishlistIds]);
+  const [category, setCategory] = useState<Category | "전체">("전체");
   const [origin, setOrigin] = useState<Origin | "전체">("전체");
   const [status, setStatus] = useState<SaleStatus | "전체">("전체");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<SortId>("new");
   const needle = keyword.toLowerCase();
 
   useEffect(() => {
+    setCategory("전체");
     setOrigin("전체");
     setStatus("전체");
+    setMinPrice("");
+    setMaxPrice("");
     setSort("new");
   }, [keyword]);
 
   const matches = useMemo(() => {
     if (!needle) return [];
+    const min = minPrice.trim() === "" ? null : Number(minPrice);
+    const max = maxPrice.trim() === "" ? null : Number(maxPrice);
     const next = source.filter((product) => {
-      if (!`${product.title} ${product.category}`.toLowerCase().includes(needle)) return false;
+      if (!product.title.toLowerCase().includes(needle)) return false;
+      if (category !== "전체" && product.category !== category) return false;
       if (origin !== "전체" && product.country !== origin) return false;
       if (status !== "전체" && product.saleStatus !== status) return false;
+      if (min !== null && !Number.isNaN(min) && product.price < min) return false;
+      if (max !== null && !Number.isNaN(max) && product.price > max) return false;
       return true;
     });
     return [...next].sort((a, b) => compareProducts(a, b, sort, wishedIds));
-  }, [needle, origin, source, status, sort, wishedIds]);
+  }, [category, maxPrice, minPrice, needle, origin, source, sort, status, wishedIds]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -85,27 +100,42 @@ export function SearchResultsView() {
       </div>
 
       {keyword ? (
-        <div className="mt-6 space-y-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-6">
-          <FilterRow label="국가">
-            <FilterChip active={origin === "전체"} onClick={() => setOrigin("전체")}>
-              전체
-            </FilterChip>
-            {ORIGINS.map((item) => (
-              <FilterChip key={item} active={origin === item} onClick={() => setOrigin(item)}>
-                {item}
-              </FilterChip>
-            ))}
-          </FilterRow>
-          <FilterRow label="판매 상태">
-            <FilterChip active={status === "전체"} onClick={() => setStatus("전체")}>
-              전체
-            </FilterChip>
-            {SALE_STATUSES.map((item) => (
-              <FilterChip key={item} active={status === item} onClick={() => setStatus(item)}>
-                {item}
-              </FilterChip>
-            ))}
-          </FilterRow>
+        <div className="mt-6 space-y-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-6">
+          <div className="space-y-4">
+            <p className="text-xs font-medium tracking-wide text-slate-400">{t("searchPrimary")}</p>
+            <FilterRow label={t("searchCategory")}>
+              <FilterChip active={category === "전체"} onClick={() => setCategory("전체")}>{t("searchAll")}</FilterChip>
+              {CATEGORIES.map((item) => (
+                <FilterChip key={item} active={category === item} onClick={() => setCategory(item)}>{item}</FilterChip>
+              ))}
+            </FilterRow>
+          </div>
+          <div className="space-y-4 border-t border-slate-200/80 pt-5">
+            <p className="text-xs font-medium tracking-wide text-slate-400">{t("searchSecondary")}</p>
+            <FilterRow label={t("searchOrigin")}>
+              <FilterChip active={origin === "전체"} onClick={() => setOrigin("전체")}>{t("searchAll")}</FilterChip>
+              {ORIGINS.map((item) => (
+                <FilterChip key={item} active={origin === item} onClick={() => setOrigin(item)}>{item}</FilterChip>
+              ))}
+            </FilterRow>
+            <FilterRow label={t("searchStatus")}>
+              <FilterChip active={status === "전체"} onClick={() => setStatus("전체")}>{t("searchAll")}</FilterChip>
+              {SALE_STATUSES.map((item) => (
+                <FilterChip key={item} active={status === item} onClick={() => setStatus(item)}>{item}</FilterChip>
+              ))}
+            </FilterRow>
+            <div className="flex flex-wrap items-end gap-4">
+              <p className="w-full text-sm font-medium text-slate-700 sm:w-24">{t("searchPrice")}</p>
+              <label className="text-sm text-slate-600">
+                {t("searchPriceMin")}
+                <input inputMode="numeric" value={minPrice} onChange={(event) => setMinPrice(event.target.value.replace(/\D/g, ""))} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
+              </label>
+              <label className="text-sm text-slate-600">
+                {t("searchPriceMax")}
+                <input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value.replace(/\D/g, ""))} className="mt-1.5 block w-32 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900" />
+              </label>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -137,23 +167,15 @@ function FilterRow({ label, children }: { label: string; children: ReactNode }) 
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
       <p className="w-24 shrink-0 text-sm font-medium text-slate-700">{label}</p>
-      <div role="tablist" aria-label={label} className="flex gap-2 overflow-x-auto pb-1">
-        {children}
-      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">{children}</div>
     </div>
   );
 }
 
 function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
   return (
-    <button type="button" role="tab" aria-selected={active} onClick={onClick} className={chipClass(active)}>
+    <button type="button" aria-pressed={active} onClick={onClick} className={`shrink-0 rounded-full px-3.5 py-2 text-sm transition ${active ? "bg-slate-900 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-800"}`}>
       {children}
     </button>
   );
-}
-
-function chipClass(active: boolean) {
-  return `shrink-0 rounded-full px-3.5 py-2 text-sm transition ${
-    active ? "bg-slate-900 text-white" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-800"
-  }`;
 }

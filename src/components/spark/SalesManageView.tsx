@@ -3,10 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { AccountPicker } from "@/features/seller-payout/AccountPicker";
-import { AddressPicker } from "@/features/seller-payout/AddressPicker";
-import { PayoutSummary } from "@/features/seller-payout/PayoutSummary";
-import { useSellerPayout } from "@/features/seller-payout/useSellerPayout";
 import {
   formatPrice,
   settlementOf,
@@ -23,15 +19,13 @@ import { useMounted } from "@/components/spark/useMounted";
 const FILTERS = [
   { id: "ALL", label: "전체" },
   { id: "OPEN", label: "거래 진행 중" },
-  { id: "DONE", label: "거래 완료/정산" },
+  { id: "DONE", label: "거래 완료" },
   { id: "CANCELLED", label: "거래 취소" },
 ] as const;
 
 type SaleFilter = (typeof FILTERS)[number]["id"];
 
-type DeskItem =
-  | { key: string; kind: "request"; roomId: string; product: Product; buyer: string }
-  | { key: string; kind: "order"; order: Order };
+type DeskItem = { key: string; kind: "order"; order: Order };
 
 const TONE: Record<string, string> = {
   판매중: "bg-emerald-50 text-emerald-700",
@@ -71,14 +65,13 @@ export function SalesManageView() {
   const mounted = useMounted();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { products, orders, rooms, user, updateOrder, decidePurchase, notify } = useSpark();
-  const [acceptRoomId, setAcceptRoomId] = useState<string | null>(null);
+  const { products, orders, user, updateOrder, notify } = useSpark();
   const [shipOrder, setShipOrder] = useState<Order | null>(null);
   const [trackOrder, setTrackOrder] = useState<Order | null>(null);
   const filter = parseFilter(searchParams.get("filter") ?? searchParams.get("status"));
   const vip = user?.membership === "vip";
 
-  const items = mounted ? collectItems(filter, products, orders, rooms) : [];
+  const items = mounted ? collectItems(filter, orders) : [];
   const { visibleCount, hasMore, sentinelRef } = useInfiniteGrid(items.length, filter);
   const visible = items.slice(0, visibleCount);
 
@@ -135,8 +128,6 @@ export function SalesManageView() {
                   item={item}
                   vip={vip}
                   product={item.kind === "order" ? products.find((product) => product.id === item.order.productId) : undefined}
-                  onAccept={setAcceptRoomId}
-                  onReject={(roomId) => decidePurchase(roomId, false)}
                   onShip={setShipOrder}
                   onTrack={setTrackOrder}
                 />
@@ -147,79 +138,52 @@ export function SalesManageView() {
         </>
       )}
 
-      {acceptRoomId ? <AcceptDialog roomId={acceptRoomId} onClose={() => setAcceptRoomId(null)} /> : null}
       {shipOrder ? <ShipDialog order={shipOrder} onClose={() => setShipOrder(null)} onSave={saveTracking} /> : null}
       {trackOrder ? <TrackDialog order={trackOrder} onClose={() => setTrackOrder(null)} /> : null}
     </>
   );
 }
 
-function collectItems(
-  filter: SaleFilter,
-  products: Product[],
-  orders: Order[],
-  rooms: { id: string; productId: string; buyerName?: string; sellerName: string; purchase?: { status: string } }[],
-): DeskItem[] {
-  const requests: DeskItem[] = rooms.flatMap((room) => {
-    const product = products.find((item) => item.id === room.productId && item.sellerId === "me");
-    if (!product || room.purchase?.status !== "대기") return [];
-    return [{ key: `request-${room.id}`, kind: "request" as const, roomId: room.id, product, buyer: room.buyerName || room.sellerName }];
-  });
-  const saleOrders = orders.filter((order) => order.role === "sale");
-  const all: DeskItem[] = [
-    ...requests,
-    ...saleOrders.map((order) => ({ key: `order-${order.id}`, kind: "order" as const, order })),
-  ];
+function collectItems(filter: SaleFilter, orders: Order[]): DeskItem[] {
+  const all: DeskItem[] = orders
+    .filter((order) => order.role === "sale")
+    .map((order) => ({ key: `order-${order.id}`, kind: "order" as const, order }));
   if (filter === "ALL") return all;
-  return all.filter((item) => itemPhase(item) === filter);
-}
-
-function itemPhase(item: DeskItem): SaleFilter {
-  if (item.kind === "request") return "OPEN";
-  return orderPhase(item.order.status);
+  return all.filter((item) => orderPhase(item.order.status) === filter);
 }
 
 function emptyLabel(filter: SaleFilter) {
   if (filter === "OPEN") return "진행 중인 거래가 없어요.";
-  if (filter === "DONE") return "완료되거나 정산된 거래가 없어요.";
+  if (filter === "DONE") return "완료된 거래가 없어요.";
   if (filter === "CANCELLED") return "취소된 거래가 없어요.";
   return "판매 내역이 없어요.";
-}
-
-function cardHref(item: DeskItem) {
-  if (item.kind === "order") return `/orders/${item.order.id}`;
-  return `/chat/${item.roomId}`;
 }
 
 function DeskCard({
   item,
   product,
   vip,
-  onAccept,
-  onReject,
   onShip,
   onTrack,
 }: {
   item: DeskItem;
   product?: Product;
   vip: boolean;
-  onAccept: (roomId: string) => void;
-  onReject: (roomId: string) => void;
   onShip: (order: Order) => void;
   onTrack: (order: Order) => void;
 }) {
-  const order = item.kind === "order" ? item.order : null;
-  const title = item.kind === "order" ? item.order.title : item.product.title;
-  const imageUrl = item.kind === "order" ? item.order.imageUrl ?? product?.imageUrl : item.product.imageUrl;
-  const motif = item.kind === "order" ? item.order.motif : item.product.motif;
-  const palette = item.kind === "order" ? item.order.palette : item.product.palette;
-  const uid = item.kind === "order" ? item.order.id : item.product.id;
-  const badge = item.kind === "order" ? item.order.status : "수락 대기";
-  const price = item.kind === "order" ? item.order.price : item.product.price;
-  const money = order ? settlementOf(order.itemPrice ?? order.price, vip) : null;
-  const payout = order?.payoutAmount ?? money?.payoutAmount ?? 0;
-  const settlement = order ? settlementState(order.status) : null;
-  const href = cardHref(item);
+  const order = item.order;
+  const title = order.title;
+  const imageUrl = order.imageUrl ?? product?.imageUrl;
+  const motif = order.motif;
+  const palette = order.palette;
+  const uid = order.id;
+  const badge = order.status;
+  const price = order.price;
+  const money = settlementOf(order.itemPrice ?? order.price, vip);
+  const payout = order.payoutAmount ?? money.payoutAmount;
+  const settlement = settlementState(order.status);
+  const href = `/orders/${order.id}`;
 
   return (
     <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-slate-400">
@@ -233,14 +197,10 @@ function DeskCard({
         <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE[badge] ?? "bg-slate-100 text-slate-600"}`}>{badge}</span>
         <h2 className="line-clamp-2 text-sm font-medium leading-5 text-slate-900 group-hover:underline">{title}</h2>
         <p className="text-sm font-semibold tabular-nums text-slate-900">{formatPrice(price)}</p>
-        {item.kind === "request" ? <p className="text-xs text-slate-500">구매자 {item.buyer}</p> : null}
-        {order ? (
-          <p className="text-xs leading-5 text-slate-500">
-            구매자 {order.counterpart}
-            {settlement ? ` · ${settlement} ${formatPrice(payout)}` : ""}
-          </p>
-        ) : null}
-        <CardActions item={item} onAccept={onAccept} onReject={onReject} onShip={onShip} onTrack={onTrack} />
+        <p className="text-xs leading-5 text-slate-500">
+          구매자 {order.counterpart} · {settlement} {formatPrice(payout)}
+        </p>
+        <CardActions item={item} onShip={onShip} onTrack={onTrack} />
       </div>
     </article>
   );
@@ -248,33 +208,21 @@ function DeskCard({
 
 function CardActions({
   item,
-  onAccept,
-  onReject,
   onShip,
   onTrack,
 }: {
   item: DeskItem;
-  onAccept: (roomId: string) => void;
-  onReject: (roomId: string) => void;
   onShip: (order: Order) => void;
   onTrack: (order: Order) => void;
 }) {
-  if (item.kind === "request") {
-    return (
-      <div className="relative z-20 mt-auto grid grid-cols-2 gap-1.5 pt-1">
-        <button type="button" onClick={() => onReject(item.roomId)} className={miniGhost}>거절</button>
-        <button type="button" onClick={() => onAccept(item.roomId)} className={miniPrimary}>수락</button>
-      </div>
-    );
-  }
-  if (item.kind === "order" && item.order.status === "결제완료") {
+  if (item.order.status === "결제완료") {
     return (
       <div className="relative z-20 mt-auto pt-1">
         <button type="button" onClick={() => onShip(item.order)} className={`${miniPrimary} w-full`}>운송장 등록</button>
       </div>
     );
   }
-  if (item.kind === "order" && item.order.status === "배송중") {
+  if (item.order.status === "배송중") {
     return (
       <div className="relative z-20 mt-auto pt-1">
         <button type="button" onClick={() => onTrack(item.order)} className={`${miniGhost} w-full`}>배송 조회</button>
@@ -282,43 +230,6 @@ function CardActions({
     );
   }
   return null;
-}
-
-function AcceptDialog({ roomId, onClose }: { roomId: string; onClose: () => void }) {
-  const payout = useSellerPayout(roomId);
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/30 px-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-labelledby="accept-sale-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
-        <h2 id="accept-sale-title" className="text-lg font-semibold text-slate-900">구매 수락</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">정산 계좌를 확인한 뒤 수락합니다. 거절한 상품은 판매중으로 남습니다.</p>
-        {payout.product && payout.payout ? (
-          <div className="mt-5 flex flex-col gap-4">
-            <PayoutSummary product={payout.product} payout={payout.payout} />
-            <AddressPicker addresses={payout.addresses} value={payout.addressId} onChange={payout.setAddressId} />
-            <AccountPicker accounts={payout.banks} value={payout.accountId} onChange={payout.setAccountId} />
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-slate-500">판매 상품을 찾을 수 없어요.</p>
-        )}
-        {!payout.isSeller ? <p className="mt-4 text-sm text-amber-800">상단에서 판매자 롤로 전환한 뒤 승인할 수 있어요.</p> : null}
-        <div className="mt-5 flex gap-2">
-          <button type="button" onClick={onClose} className={`${ghostButtonClass} flex-1`}>닫기</button>
-          <button
-            type="button"
-            disabled={!payout.addressId || !payout.accountId || !payout.isSeller}
-            onClick={() => {
-              payout.confirm();
-              onClose();
-            }}
-            className={`${primaryButtonClass} flex-1`}
-          >
-            저장하고 수락
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function ShipDialog({ order, onClose, onSave }: { order: Order; onClose: () => void; onSave: (tracking: string) => void }) {
