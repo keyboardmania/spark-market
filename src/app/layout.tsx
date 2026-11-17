@@ -10,8 +10,6 @@ import "./globals.css";
 
 const DEFAULT_LOCALE: LocaleId = "ko";
 const LOCALE_COOKIE = "spark-locale";
-const LOCALE_IDS = LOCALES.map((item) => item.id);
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -36,8 +34,6 @@ export const metadata: Metadata = {
   description: "취향과 수집품이 머무는 프리미엄 C2C 플랫폼 Spark",
 };
 
-const localeBootScript = `(function(){try{var m=document.cookie.match(/(?:^|; )${LOCALE_COOKIE}=([^;]*)/);if(!m)return;var id=decodeURIComponent(m[1]);var ok=${JSON.stringify(LOCALE_IDS)};if(ok.indexOf(id)!==-1)document.documentElement.lang=id}catch(e){}})()`;
-
 function isLocaleId(value: string | undefined): value is LocaleId {
   return LOCALES.some((item) => item.id === value);
 }
@@ -49,9 +45,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: localeBootScript }} />
-      </head>
       <body className="min-h-full bg-white text-slate-900">
         <Suspense fallback={<RootFallback />}>
           <RootContent>{children}</RootContent>

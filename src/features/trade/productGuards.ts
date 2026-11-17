@@ -3,22 +3,26 @@ import type { ChatRoom, Order, Product, SaleStatus } from "@/data/mockData";
 export const DELETE_BLOCKED_MESSAGE =
   "현재 거래 진행 중이거나 예약 중인 상품은 상태를 변경한 후 삭제할 수 있습니다.";
 
-const LIVE_PURCHASE = new Set(["대기", "승인", "결제완료"]);
-const CLOSED_ORDER = new Set(["구매확정", "거래취소"]);
+const IN_TRANSACTION = new Set(["승인", "결제완료"]);
 
 export function productDeleteBlock(
   product: Pick<Product, "id" | "saleStatus">,
   rooms: Pick<ChatRoom, "productId" | "purchase">[],
-  orders: Pick<Order, "productId" | "status">[],
+  _orders: Pick<Order, "productId" | "status">[],
 ): string | null {
-  if (product.saleStatus === "판매완료") return null;
-  const reserved = product.saleStatus === "예약중";
-  const interacting = rooms.some(
-    (room) => room.productId === product.id && !!room.purchase && LIVE_PURCHASE.has(room.purchase.status),
+  if (product.saleStatus === "예약중" || product.saleStatus === "판매완료") return DELETE_BLOCKED_MESSAGE;
+  const inTransaction = rooms.some(
+    (room) => room.productId === product.id && !!room.purchase && IN_TRANSACTION.has(room.purchase.status),
   );
-  const openOrder = orders.some((order) => order.productId === product.id && !CLOSED_ORDER.has(order.status));
-  if (reserved || interacting || openOrder) return DELETE_BLOCKED_MESSAGE;
+  if (inTransaction) return DELETE_BLOCKED_MESSAGE;
   return null;
+}
+
+export function pendingPurchaseRooms<T extends { id: string; productId: string; purchase?: { status: string } }>(
+  productId: string,
+  rooms: T[],
+) {
+  return rooms.filter((room) => room.productId === productId && room.purchase?.status === "대기");
 }
 
 export function saleStatusLabel(status: SaleStatus) {

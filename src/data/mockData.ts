@@ -297,7 +297,7 @@ export type ChatMessage = {
   at: string;
   sentAt?: string;
   kind?: "purchase" | "payment";
-  systemKey?: "paymentRequest" | "paymentDone" | "purchaseRejected" | "purchaseRequested" | "externalPayWarning" | "paymentPrompt";
+  systemKey?: "paymentRequest" | "paymentDone" | "purchaseRejected" | "purchaseCancelled" | "purchaseRequested" | "externalPayWarning" | "paymentPrompt";
   systemParams?: Record<string, string>;
 };
 

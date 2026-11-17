@@ -26,7 +26,7 @@ import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/s
 import { useSpark } from "@/components/spark/SparkProvider";
 import { useMounted } from "@/components/spark/useMounted";
 import { useI18n } from "@/features/i18n/useI18n";
-import { productDeleteBlock, saleStatusLabel } from "@/features/trade/productGuards";
+import { pendingPurchaseRooms, productDeleteBlock, saleStatusLabel } from "@/features/trade/productGuards";
 
 const MEDIA_HINT = "사진첩에서만 선택 · 최소 1개, 최대 10개 · 사진(png, jpg, jpeg), 동영상(mp4, mov)";
 const MAX_MEDIA = 10;
@@ -562,9 +562,11 @@ export function DeleteProductButton({
   variant?: "ghost" | "text";
   onDeleted?: () => void;
 }) {
+  const { t } = useI18n();
   const { softDeleteProduct, notify, rooms, orders } = useSpark();
   const [open, setOpen] = useState(false);
   const block = productDeleteBlock(product, rooms, orders);
+  const pending = !block && pendingPurchaseRooms(product.id, rooms).length > 0;
 
   return (
     <>
@@ -584,12 +586,14 @@ export function DeleteProductButton({
             className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="delete-product-title" className="text-lg font-semibold text-slate-900">{block ? "삭제할 수 없어요" : "상품을 삭제할까요?"}</h2>
+            <h2 id="delete-product-title" className="text-lg font-semibold text-slate-900">
+              {block ? "삭제할 수 없어요" : pending ? t("deletePendingTitle") : "상품을 삭제할까요?"}
+            </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {block ?? `${product.title}을 삭제하면 복구할 수 없습니다. 목록에서 바로 사라집니다.`}
+              {block ?? (pending ? t("deletePendingBody") : `${product.title}을 삭제하면 복구할 수 없습니다. 목록에서 바로 사라집니다.`)}
             </p>
             <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setOpen(false)} className={`${ghostButtonClass} flex-1`}>{block ? "확인" : "취소"}</button>
+              <button type="button" onClick={() => setOpen(false)} className={`${ghostButtonClass} flex-1`}>{block ? t("confirm") : t("cancel")}</button>
               {block ? null : (
                 <button
                   type="button"
@@ -602,7 +606,7 @@ export function DeleteProductButton({
                   }}
                   className={`${primaryButtonClass} flex-1`}
                 >
-                  삭제
+                  {pending ? t("deletePendingSubmit") : "삭제"}
                 </button>
               )}
             </div>

@@ -20,6 +20,8 @@ import { AddressPicker } from "@/features/seller-payout/AddressPicker";
 import { PayoutSummary } from "@/features/seller-payout/PayoutSummary";
 import { useSellerPayout } from "@/features/seller-payout/useSellerPayout";
 
+const CHAT_HEADER_CLASS = "flex items-center gap-3 border-b border-slate-100 px-4 py-3";
+const CHAT_LEAVE_CLASS = "shrink-0 whitespace-nowrap text-xs font-medium text-slate-700";
 const EMOJIS = ["✨", "💖", "🧸", "😊", "🙌", "🎀", "😭", "⚡"];
 const CHAT_MEDIA_LIMIT = 10;
 const CHAT_MEDIA_EXT = new Set(["png", "jpg", "jpeg", "mp4", "mov"]);
@@ -238,7 +240,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
         <section className={`${showList ? "hidden" : "flex"} min-h-0 flex-col md:flex`}>
           {active && product ? (
             <>
-              <header className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+              <header className={CHAT_HEADER_CLASS}>
                 <button type="button" className="text-sm text-slate-400 md:hidden" onClick={() => setShowList(true)}>
                   {t("chatList")}
                 </button>
@@ -246,13 +248,15 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                   <p className="text-sm font-medium text-slate-900">{roomTitle(active, products, t("partyBuyer"))}</p>
                   <p className="text-xs text-slate-400">{isSeller ? t("chatSellerRole") : t("chatBuyerRole")} · {product.sellerId === "me" ? t("chatMine") : active.sellerHandle}</p>
                 </div>
-                <ReportButton
-                  targetType="유저"
-                  targetId={product.sellerId === "me" ? active.sellerName : getSeller(product.sellerId).name}
-                  targetLabel={product.sellerId === "me" ? active.sellerName : getSeller(product.sellerId).name}
-                />
-                <button type="button" className="text-xs text-slate-500" onClick={() => receiveSample()}>{t("chatSample")}</button>
-                <button type="button" className="text-xs text-slate-500" onClick={() => setLeaveOpen(true)}>{t("chatLeave")}</button>
+                <div className="ml-auto flex shrink-0 items-center gap-3">
+                  <ReportButton
+                    targetType="유저"
+                    targetId={product.sellerId === "me" ? active.sellerName : getSeller(product.sellerId).name}
+                    targetLabel={product.sellerId === "me" ? active.sellerName : getSeller(product.sellerId).name}
+                  />
+                  <button type="button" className="shrink-0 whitespace-nowrap text-xs text-slate-500" onClick={() => receiveSample()}>{t("chatSample")}</button>
+                  <button type="button" className={CHAT_LEAVE_CLASS} onClick={() => setLeaveOpen(true)}>{t("chatLeave")}</button>
+                </div>
               </header>
               <div className="border-b border-slate-100 px-4 py-3">
                 <ProductSummary product={product} />
@@ -285,6 +289,12 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                   submit();
                 }}
               >
+                {active.activity === "종료" ? (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3 py-2">
+                  <p className="text-xs leading-5 text-slate-500">{t("chatClosed")}</p>
+                  <button type="button" className={ghostButtonClass} onClick={() => setLeaveOpen(true)}>{t("chatLeaveTitle")}</button>
+                </div>
+              ) : (
                 <TradeActions
                   buyer={!isSeller}
                   saleStatus={product.saleStatus}
@@ -294,6 +304,7 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
                   onReject={() => decidePurchase(active.id, false)}
                   onPay={() => router.push(`/chat/${active.id}/pay`)}
                 />
+              )}
                 {emojiOpen ? (
                   <div className="mb-2 flex flex-wrap gap-1 rounded-2xl bg-slate-50 p-2">
                     {EMOJIS.map((emoji) => (
@@ -341,23 +352,67 @@ export function ChatScreen({ initialRoomId }: { initialRoomId?: string }) {
               {approveOpen && isSeller && active.purchase?.status === "대기" ? (
                 <ApprovePurchaseDialog roomId={active.id} onClose={() => setApproveOpen(false)} />
               ) : null}
-              {leaveOpen ? (
-                <ConfirmDialog
-                  title={t("chatLeaveTitle")}
-                  body={t("chatLeaveBody")}
-                  confirmLabel={t("chatLeaveConfirm")}
-                  cancelLabel={t("cancel")}
-                  onClose={() => setLeaveOpen(false)}
-                  onConfirm={confirmLeave}
-                />
-              ) : null}
             </>
+          ) : active ? (
+            <InactiveRoom
+              title={roomTitle(active, products, t("partyBuyer"))}
+              notice={t("chatNoProduct")}
+              messages={active.messages}
+              onBack={() => setShowList(true)}
+              onLeave={() => setLeaveOpen(true)}
+            />
           ) : (
             <div className="grid flex-1 place-items-center text-sm text-slate-400">{t("chatPick")}</div>
           )}
+          {leaveOpen && active ? (
+            <ConfirmDialog
+              title={t("chatLeaveTitle")}
+              body={t("chatLeaveBody")}
+              confirmLabel={t("chatLeaveConfirm")}
+              cancelLabel={t("cancel")}
+              onClose={() => setLeaveOpen(false)}
+              onConfirm={confirmLeave}
+            />
+          ) : null}
         </section>
       </div>
     </div>
+  );
+}
+
+function InactiveRoom({
+  title,
+  notice,
+  messages,
+  onBack,
+  onLeave,
+}: {
+  title: string;
+  notice: string;
+  messages: ChatMessage[];
+  onBack: () => void;
+  onLeave: () => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <>
+      <header className={CHAT_HEADER_CLASS}>
+        <button type="button" className="text-sm text-slate-400 md:hidden" onClick={onBack}>
+          {t("chatList")}
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-slate-900">{title}</p>
+          <p className="text-xs text-slate-400">{notice}</p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <button type="button" className={CHAT_LEAVE_CLASS} onClick={onLeave}>{t("chatLeave")}</button>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/40 px-4 py-4">
+        {messages.map((message) => <MessageBubble key={message.id} message={message} mine={message.sender === "me"} />)}
+      </div>
+    </>
   );
 }
 

@@ -34,7 +34,7 @@ import type { LocaleId } from "@/i18n";
 import { UI, fill } from "@/features/i18n/ui";
 import { applyRetentionPolicy, getShared, useShared } from "@/data/shared";
 import { cloneChatRooms, dropRoom } from "@/features/chat/rooms";
-import { productDeleteBlock } from "@/features/trade/productGuards";
+import { pendingPurchaseRooms, productDeleteBlock } from "@/features/trade/productGuards";
 import { WIREFRAME_ADDRESSES, WIREFRAME_BANKS, WIREFRAME_LOGIN } from "@/features/wireframe/demoProfile";
 
 export type TradeRole = "buyer" | "seller";
@@ -578,6 +578,23 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
     if (block) {
       notify(block);
       return false;
+    }
+    const waitingIds = new Set(pendingPurchaseRooms(id, rooms).map((room) => room.id));
+    if (waitingIds.size > 0) {
+      const at = formatTime();
+      setRooms((current) =>
+        current.map((room) => {
+          if (!waitingIds.has(room.id) || !room.purchase) return room;
+          const note: ChatMessage = {
+            id: crypto.randomUUID(),
+            sender: "system",
+            at,
+            systemKey: "purchaseCancelled",
+            text: UI.ko.purchaseCancelled,
+          };
+          return { ...room, purchase: { ...room.purchase, status: "거절" }, messages: [...room.messages, note] };
+        }),
+      );
     }
     const deletedAt = new Date().toISOString();
     const hardDeleteAt = hardDeleteAtFrom(deletedAt);
