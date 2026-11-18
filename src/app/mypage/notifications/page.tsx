@@ -1,16 +1,10 @@
-import { Suspense } from "react";
-import type { Metadata } from "next";
-import { AlertsPanel } from "@/components/spark/AlertsPanel";
-import { MyPageFrame } from "@/components/spark/MyPageView";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "알림" };
-
-export default function NotificationsPage() {
-  return (
-    <MyPageFrame>
-      <Suspense fallback={<div className="h-40 animate-pulse rounded-2xl bg-slate-100" />}>
-        <AlertsPanel />
-      </Suspense>
-    </MyPageFrame>
-  );
+export default async function NotificationsRedirectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const params = await searchParams;
+  redirect(params.tab === "inbox" ? "/mypage/inbox" : "/mypage/notification-settings");
 }

@@ -682,8 +682,6 @@ export function WithdrawPanel() {
   );
 }
 
-export { AlertsPanel };
-
 const RECEIVED_REVIEW_PAGE = 5;
 
 export function ReviewsPanel() {

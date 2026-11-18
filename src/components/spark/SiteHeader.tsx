@@ -442,20 +442,18 @@ function NotificationBell({
           ))
         )}
       </ul>
-      {notifications.length > 5 ? (
-        <div className="border-t border-slate-100 px-4 py-3">
-          <button
-            type="button"
-            className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-900"
-            onClick={() => {
-              onOpenChange(false);
-              router.push("/mypage/notifications?tab=inbox");
-            }}
-          >
-            알림함 전체 보기
-          </button>
-        </div>
-      ) : null}
+      <div className="border-t border-slate-100 px-4 py-3">
+        <button
+          type="button"
+          className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-900"
+          onClick={() => {
+            onOpenChange(false);
+            router.push("/mypage/inbox");
+          }}
+        >
+          알림함으로 이동
+        </button>
+      </div>
     </div>
   ) : null;
 
