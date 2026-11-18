@@ -9,13 +9,19 @@ import { FAQ_CATEGORIES } from "@/data/mockData";
 import { addFaq, addNotice, addTerm, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
 
 export function InquiriesAdmin() {
-  const { inquiries, replyInquiry } = useAdmin();
+  const { inquiries, replyInquiry, markInquiryRead } = useAdmin();
   const [selectedId, setSelectedId] = useState(inquiries.find((item) => item.status === "미답변")?.id ?? inquiries[0]?.id ?? "");
   const [reply, setReply] = useState("");
   const [notice, setNotice] = useState("");
   const selected = inquiries.find((item) => item.id === selectedId) ?? null;
   const inquiryPage = useAdminPage(inquiries.length, "inquiries");
   const inquiryRows = inquiries.slice(inquiryPage.start, inquiryPage.start + inquiryPage.pageSize);
+
+  function openInquiry(id: string, replyText: string) {
+    markInquiryRead(id);
+    setSelectedId(id);
+    setReply(replyText);
+  }
 
   return (
     <div className="space-y-6">
@@ -35,23 +41,33 @@ export function InquiriesAdmin() {
               </tr>
             </thead>
             <tbody>
-              {inquiryRows.map((item) => (
-                <tr key={item.id} className={item.id === selectedId ? "bg-slate-50" : undefined}>
-                  <td className={tdClass}>
-                    <button type="button" className="text-left" onClick={() => { setSelectedId(item.id); setReply(item.reply); }}>
-                      <span className="block font-medium text-slate-900">{item.subject}</span>
+              {inquiryRows.map((item) => {
+                const unread = item.status === "미답변" && !item.isRead;
+                return (
+                  <tr
+                    key={item.id}
+                    className={`cursor-pointer ${item.id === selectedId ? "bg-slate-50" : unread ? "bg-rose-50/40 hover:bg-rose-50/70" : "hover:bg-slate-50"}`}
+                    onClick={() => openInquiry(item.id, item.reply)}
+                  >
+                    <td className={tdClass}>
+                      <span className="block font-medium text-slate-900">
+                        <span className="inline-flex items-center gap-2">
+                          {item.subject}
+                          {unread ? <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-medium leading-4 text-white">1</span> : null}
+                        </span>
+                      </span>
                       <span className="text-xs text-slate-400">{item.createdAt}</span>
-                    </button>
-                  </td>
-                  <td className={tdClass}>
-                    {item.member}
-                    <span className="block text-xs text-slate-400">{item.email}</span>
-                  </td>
-                  <td className={tdClass}>
-                    <StatusPill tone={item.status === "미답변" ? "rose" : "emerald"}>{item.status}</StatusPill>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className={tdClass}>
+                      {item.member}
+                      <span className="block text-xs text-slate-400">{item.email}</span>
+                    </td>
+                    <td className={tdClass}>
+                      <StatusPill tone={item.status === "미답변" ? "rose" : "emerald"}>{item.status}</StatusPill>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </DataTable>
           <AdminPager page={inquiryPage.page} pageCount={inquiryPage.pageCount} total={inquiryPage.total} pageSize={inquiryPage.pageSize} onPage={inquiryPage.setPage} />

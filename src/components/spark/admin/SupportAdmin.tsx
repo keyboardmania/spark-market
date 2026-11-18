@@ -5,7 +5,7 @@ import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass } from "@/components/spark/styles";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { acceptReport, isReportClosed, rejectReport, reportCategory, reportTimestamp, reviewReport, useShared, type LiveReport } from "@/data/shared";
+import { acceptReport, isReportClosed, markReportRead, rejectReport, reportCategory, reportTimestamp, reviewReport, useShared, type LiveReport } from "@/data/shared";
 
 const FILTERS = ["완료 제외", "전체", "접수", "검토", "수락", "거절"] as const;
 type ReportFilter = (typeof FILTERS)[number];
@@ -70,29 +70,45 @@ export function SupportAdmin() {
             </tr>
           </thead>
           <tbody>
-            {reportRows.map((report) => (
-              <tr key={report.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSelectedId(report.id)}>
-                <td className={tdClass}>{report.category}</td>
-                <td className={tdClass}>{report.reporter}</td>
-                <td className={`${tdClass} font-medium text-slate-900`}>{report.targetLabel}</td>
-                <td className={`${tdClass} tabular-nums`}>{report.createdAt}</td>
-                <td className={tdClass}>
-                  <StatusPill tone={reportTone(report.status)}>{report.status}</StatusPill>
-                </td>
-                <td className={tdClass}>
-                  <button
-                    type="button"
-                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedId(report.id);
-                    }}
-                  >
-                    상세
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {reportRows.map((report) => {
+              const unread = (report.status === "접수" || report.status === "검토") && !report.isRead;
+              return (
+                <tr
+                  key={report.id}
+                  className={`cursor-pointer hover:bg-slate-50 ${unread ? "bg-rose-50/40" : ""}`}
+                  onClick={() => {
+                    markReportRead(report.id);
+                    setSelectedId(report.id);
+                  }}
+                >
+                  <td className={tdClass}>
+                    <span className="inline-flex items-center gap-2">
+                      {report.category}
+                      {unread ? <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-medium leading-4 text-white">1</span> : null}
+                    </span>
+                  </td>
+                  <td className={tdClass}>{report.reporter}</td>
+                  <td className={`${tdClass} font-medium text-slate-900`}>{report.targetLabel}</td>
+                  <td className={`${tdClass} tabular-nums`}>{report.createdAt}</td>
+                  <td className={tdClass}>
+                    <StatusPill tone={reportTone(report.status)}>{report.status}</StatusPill>
+                  </td>
+                  <td className={tdClass}>
+                    <button
+                      type="button"
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        markReportRead(report.id);
+                        setSelectedId(report.id);
+                      }}
+                    >
+                      상세
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {shown.length === 0 ? (
               <tr>
                 <td className={`${tdClass} text-slate-400`} colSpan={6}>

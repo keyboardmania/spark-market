@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useMounted } from "@/components/spark/useMounted";
 import { ADMIN_ACCOUNTS, ADMIN_DEMO } from "@/data/mockData";
 import { useAdmin, type AdminLoginFailure } from "@/components/spark/AdminProvider";
+import { PasswordField } from "@/components/spark/admin/PasswordField";
 import { fieldClass, primaryButtonClass } from "@/components/spark/styles";
 
 export function AdminLogin() {
@@ -57,17 +58,13 @@ export function AdminLogin() {
             aria-invalid={error?.field === "loginId"}
             className={fieldClass}
           />
-          <label className="block text-xs font-medium text-slate-500" htmlFor="admin-password">
-            비밀번호
-          </label>
-          <input
+          <PasswordField
             id="admin-password"
-            type="password"
-            autoComplete="current-password"
+            label="비밀번호"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            aria-invalid={error?.field === "password"}
-            className={fieldClass}
+            onChange={setPassword}
+            autoComplete="current-password"
+            invalid={error?.field === "password"}
           />
           {error ? (
             <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">

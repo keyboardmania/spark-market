@@ -34,6 +34,7 @@ export type LiveReport = {
   reporter: string;
   createdAt: string;
   status: "접수" | "검토" | "수락" | "거절";
+  isRead?: boolean;
 };
 
 export type RetentionRecord = {
@@ -92,6 +93,7 @@ const INITIAL_REPORTS: LiveReport[] = ADMIN_REPORTS.map((report) => ({
   reporter: report.reporter,
   createdAt: report.createdAt,
   status: report.status,
+  isRead: report.status === "수락" || report.status === "거절",
 }));
 
 const PRODUCT_SANCTION_AT = "2026-10-27T09:00:00+09:00";
@@ -179,6 +181,14 @@ export function reviewReport(id: string) {
   emit({
     ...base,
     reports: base.reports.map((report) => (report.id === id && report.status === "접수" ? { ...report, status: "검토" } : report)),
+  });
+}
+
+export function markReportRead(id: string) {
+  const base = purgeExpired(state);
+  emit({
+    ...base,
+    reports: base.reports.map((report) => (report.id === id ? { ...report, isRead: true } : report)),
   });
 }
 

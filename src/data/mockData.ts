@@ -2295,6 +2295,7 @@ export type AdminInquiry = {
   createdAt: string;
   status: InquiryStatus;
   reply: string;
+  isRead?: boolean;
 };
 
 export const ADMIN_INQUIRIES: AdminInquiry[] = [
@@ -2308,6 +2309,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
     createdAt: "2026.10.27 14:20",
     status: "미답변",
     reply: "",
+    isRead: false,
   },
   {
     id: "inq-328",
@@ -2319,6 +2321,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
     createdAt: "2026.10.27 11:05",
     status: "미답변",
     reply: "",
+    isRead: false,
   },
   {
     id: "inq-301",

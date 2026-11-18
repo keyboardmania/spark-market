@@ -45,8 +45,8 @@ function AdminFrame({ children, session }: { children: ReactNode; session: { log
   const router = useRouter();
   const { logout, inquiries } = useAdmin();
   const shared = useShared();
-  const openReports = shared.reports.filter((item) => item.status === "접수" || item.status === "검토").length;
-  const openInquiries = inquiries.filter((item) => item.status === "미답변").length;
+  const openReports = shared.reports.filter((item) => (item.status === "접수" || item.status === "검토") && !item.isRead).length;
+  const openInquiries = inquiries.filter((item) => item.status === "미답변" && !item.isRead).length;
 
   function signOut() {
     logout();
@@ -99,6 +99,9 @@ function AdminFrame({ children, session }: { children: ReactNode; session: { log
             )}
           </p>
           <div className="flex items-center gap-2">
+            <Link href="/admin/password" className="rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
+              비밀번호 변경
+            </Link>
             <Link href="/" className="rounded-full px-3 py-2 text-sm text-slate-500 hover:bg-slate-50">
               상점 보기
             </Link>

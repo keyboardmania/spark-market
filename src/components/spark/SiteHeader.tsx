@@ -93,7 +93,10 @@ export function SiteHeader() {
               </>
             ) : (
               <>
-                <Link href="/login" className="inline-flex whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-600 hover:bg-slate-50">
+                <Link
+                  href={pathname.startsWith("/products/") ? `/login?next=${encodeURIComponent(pathname)}` : "/login"}
+                  className="inline-flex whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] leading-none text-slate-600 hover:bg-slate-50"
+                >
                   {t("login")}
                 </Link>
                 <Link href="/signup" className="inline-flex whitespace-nowrap rounded-full bg-slate-900 px-2.5 py-1.5 text-[13px] font-medium leading-none text-white hover:bg-slate-700">

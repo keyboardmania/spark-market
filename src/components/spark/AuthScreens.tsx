@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { useSpark } from "@/components/spark/SparkProvider";
@@ -11,6 +11,19 @@ import { useI18n } from "@/features/i18n/useI18n";
 import { fill } from "@/features/i18n/ui";
 import { QuickFill } from "@/features/wireframe/QuickFill";
 import { WIREFRAME_LOGIN } from "@/features/wireframe/demoProfile";
+
+function safeReturnPath(raw: string | null) {
+  if (!raw) return "/";
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return "/";
+  }
+  if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("://")) return "/";
+  if (decoded.startsWith("/login") || decoded.startsWith("/signup") || decoded.startsWith("/admin")) return "/";
+  return decoded;
+}
 
 const SOCIAL_PROVIDERS = [
   { id: "line" as const, label: "socialLine" as const, name: "LINE", className: "bg-[#06C755] text-white", mark: "L" },
@@ -39,6 +52,8 @@ export function passwordIssue(password: string) {
 
 export function LoginScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = safeReturnPath(searchParams.get("next"));
   const { locale, t } = useI18n();
   const { login, authenticate, findAccount, notify } = useSpark();
   const [email, setEmail] = useState("");
@@ -54,7 +69,7 @@ export function LoginScreen() {
     setError(null);
     login(existing);
     notify(fill(t("loginHello"), { name: existing.name }));
-    router.push("/");
+    router.push(returnTo);
   }
 
   function onSubmit(event: FormEvent) {
@@ -67,7 +82,7 @@ export function LoginScreen() {
     setError(null);
     login(user);
     notify(fill(t("loginHello"), { name: user.name }));
-    router.push("/");
+    router.push(returnTo);
   }
 
   return (

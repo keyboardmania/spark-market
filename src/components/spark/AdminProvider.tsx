@@ -45,10 +45,11 @@ export type AdminLoginResult = { ok: true } | AdminLoginFailure;
 export type CreateAdminInput = {
   loginId: string;
   email: string;
-  role: AdminRole;
+  role?: AdminRole;
   password: string;
-  verifyCode: string;
 };
+
+const ADMIN_PASSWORDS_KEY = "spark-admin-passwords";
 
 type AdminContextValue = {
   ready: boolean;
@@ -69,10 +70,15 @@ type AdminContextValue = {
   approveSettlement: (id: string) => void;
   inquiries: AdminInquiry[];
   replyInquiry: (id: string, reply: string) => void;
+  markInquiryRead: (id: string) => void;
   reports: AdminReport[];
   setReportStatus: (id: string, status: ReportStatus) => void;
   admins: AdminAccount[];
   createAdmin: (input: CreateAdminInput) => { ok: true } | { ok: false; message: string };
+  deleteAdmin: (id: string) => { ok: true } | { ok: false; message: string };
+  confirmAdminPassword: (password: string) => boolean;
+  changeAdminPassword: (currentPassword: string, code: string, nextPassword: string) => { ok: true } | { ok: false; message: string };
+  requestAdminResetCode: () => boolean;
 };
 
 const AdminContext = createContext<AdminContextValue | null>(null);
@@ -97,6 +103,31 @@ function persistAdmins(admins: AdminAccount[]) {
   } catch (error) {
     console.error("[Spark admin] 운영자 목록을 저장하지 못했어요.", error);
   }
+}
+
+function readPasswords(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(ADMIN_PASSWORDS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistPasswords(passwords: Record<string, string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ADMIN_PASSWORDS_KEY, JSON.stringify(passwords));
+  } catch (error) {
+    console.error("[Spark admin] 비밀번호를 저장하지 못했어요.", error);
+  }
+}
+
+function passwordFor(loginId: string) {
+  return readPasswords()[loginId.toLowerCase()] ?? ADMIN_DEMO.password;
 }
 
 function readStoredSession(admins: AdminAccount[]): AdminSession | null {
@@ -171,7 +202,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         const normalizedId = loginId.trim().toLowerCase();
         const normalizedPassword = password.trim();
         const account = admins.find((item) => item.loginId.toLowerCase() === normalizedId);
-        if (!normalizedId || !normalizedPassword || !account || normalizedPassword !== ADMIN_DEMO.password) {
+        if (!normalizedId || !normalizedPassword || !account || normalizedPassword !== passwordFor(account.loginId)) {
           return fail("session", "아이디 또는 비밀번호가 올바르지 않습니다.");
         }
         if (account.status === "정지") {
@@ -318,8 +349,11 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         const text = reply.trim();
         if (!text) return;
         setInquiries((current) =>
-          current.map((item) => (item.id === id ? { ...item, reply: text, status: "답변완료" } : item)),
+          current.map((item) => (item.id === id ? { ...item, reply: text, status: "답변완료", isRead: true } : item)),
         );
+      },
+      markInquiryRead(id) {
+        setInquiries((current) => current.map((item) => (item.id === id ? { ...item, isRead: true } : item)));
       },
       reports,
       setReportStatus(id, status) {
@@ -332,11 +366,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         }
         const loginId = input.loginId.trim();
         const email = input.email.trim().toLowerCase();
-        if (!loginId || !email || !input.password.trim()) {
+        const password = input.password.trim();
+        if (!loginId || !email || !password) {
           return { ok: false as const, message: "아이디, 이메일, 비밀번호를 모두 입력해 주세요." };
-        }
-        if (input.verifyCode.trim() !== ADMIN_DEMO.verifyCode) {
-          return { ok: false as const, message: "이메일 인증 코드가 올바르지 않아요." };
         }
         if (admins.some((item) => item.loginId.toLowerCase() === loginId.toLowerCase())) {
           return { ok: false as const, message: "이미 사용 중인 관리자 아이디예요." };
@@ -369,6 +401,54 @@ export function AdminProvider({ children }: { children: ReactNode }) {
           persistAdmins(list);
           return list;
         });
+        const passwords = readPasswords();
+        passwords[loginId.toLowerCase()] = password;
+        persistPasswords(passwords);
+        return { ok: true as const };
+      },
+      deleteAdmin(id) {
+        if (session?.role !== "슈퍼 관리자") {
+          return { ok: false as const, message: "슈퍼 관리자만 운영자를 삭제할 수 있어요." };
+        }
+        const target = admins.find((item) => item.id === id);
+        if (!target) return { ok: false as const, message: "운영자를 찾을 수 없어요." };
+        if (target.loginId === session.loginId) {
+          return { ok: false as const, message: "현재 로그인한 계정은 삭제할 수 없어요." };
+        }
+        if (target.role === "슈퍼 관리자" && admins.filter((item) => item.role === "슈퍼 관리자" && item.id !== id).length === 0) {
+          return { ok: false as const, message: "마지막 슈퍼 관리자는 삭제할 수 없어요." };
+        }
+        setAdmins((current) => {
+          const list = current.filter((item) => item.id !== id);
+          persistAdmins(list);
+          return list;
+        });
+        const passwords = readPasswords();
+        delete passwords[target.loginId.toLowerCase()];
+        persistPasswords(passwords);
+        return { ok: true as const };
+      },
+      requestAdminResetCode() {
+        return Boolean(session);
+      },
+      confirmAdminPassword(password) {
+        if (!session) return false;
+        return password === passwordFor(session.loginId);
+      },
+      changeAdminPassword(currentPassword, code, nextPassword) {
+        if (!session) return { ok: false as const, message: "로그인이 필요해요." };
+        if (currentPassword !== passwordFor(session.loginId)) {
+          return { ok: false as const, message: "현재 비밀번호가 맞지 않아요." };
+        }
+        if (code.trim() !== ADMIN_DEMO.verifyCode) {
+          return { ok: false as const, message: "인증번호가 맞지 않아요." };
+        }
+        if (!nextPassword.trim() || nextPassword === currentPassword) {
+          return { ok: false as const, message: "새 비밀번호를 확인해 주세요." };
+        }
+        const passwords = readPasswords();
+        passwords[session.loginId.toLowerCase()] = nextPassword.trim();
+        persistPasswords(passwords);
         return { ok: true as const };
       },
     }),
