@@ -1,23 +1,48 @@
 "use client";
 
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
+import { DataTable, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import type { AlarmHistoryRecord } from "@/features/admin-alarms/model";
 
 export function AlarmHistoryList({ history }: { history: AlarmHistoryRecord[] }) {
-  const page = useAdminPage(history.length, history.map((item) => item.id).join(","));
-  const rows = history.slice(page.start, page.start + page.pageSize);
+  const sorted = history.slice().sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  const page = useAdminPage(sorted.length, sorted.map((item) => item.id).join(","));
+  const rows = sorted.slice(page.start, page.start + page.pageSize);
+
   return (
     <>
-    <ul className="flex flex-col">
-      {rows.map((item) => (
-        <li key={item.id} className="flex flex-col gap-1 border-t border-slate-100 px-5 py-3 text-sm">
-          <span className="text-xs text-slate-400">{item.sentAt} · {item.userName}</span>
-          <span className="font-medium text-slate-900">{item.title}</span>
-          <span className="text-slate-600">{item.body}</span>
-        </li>
-      ))}
-    </ul>
-    <AdminPager page={page.page} pageCount={page.pageCount} total={page.total} pageSize={page.pageSize} onPage={page.setPage} />
+      <DataTable>
+        <thead>
+          <tr>
+            <th className={thClass}>발송 시각</th>
+            <th className={thClass}>알림 종류</th>
+            <th className={thClass}>수신자</th>
+            <th className={thClass}>제목</th>
+            <th className={thClass}>내용</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((item) => (
+            <tr key={item.id}>
+              <td className={`${tdClass} tabular-nums`}>{item.sentAt}</td>
+              <td className={tdClass}>
+                <StatusPill tone={item.type === "채팅" ? "sky" : "amber"}>{item.type}</StatusPill>
+              </td>
+              <td className={tdClass}>{item.userName}</td>
+              <td className={`${tdClass} font-medium text-slate-900`}>{item.title}</td>
+              <td className={tdClass}>{item.body}</td>
+            </tr>
+          ))}
+          {sorted.length === 0 ? (
+            <tr>
+              <td className={`${tdClass} text-slate-400`} colSpan={5}>
+                발송 내역이 없어요.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </DataTable>
+      <AdminPager page={page.page} pageCount={page.pageCount} total={page.total} pageSize={page.pageSize} onPage={page.setPage} />
     </>
   );
 }

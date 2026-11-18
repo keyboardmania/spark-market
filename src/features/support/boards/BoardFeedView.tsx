@@ -45,7 +45,13 @@ function boardLede(board: { userWrite: boolean; fixed: boolean }) {
 }
 
 function NoticeList({ pinned }: { pinned: boolean }) {
-  const notices = useShared().notices.filter((item) => !item.deletedAt);
+  const notices = useShared()
+    .notices.filter((item) => !item.deletedAt && item.visible)
+    .slice()
+    .sort((a, b) => {
+      if (pinned && a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
   const [filter, setFilter] = useState<NoticeCategory | "전체">("전체");
   const visible = notices.filter((item) => filter === "전체" || item.category === filter);
 
@@ -59,11 +65,11 @@ function NoticeList({ pinned }: { pinned: boolean }) {
         ))}
       </div>
       <ul className="flex flex-col gap-2">
-        {visible.map((item, index) => (
+        {visible.map((item) => (
           <li key={item.id}>
             <Link href={`/support/notices/${item.id}`} className="flex flex-col gap-1 rounded-2xl border border-slate-200 px-4 py-4 hover:bg-slate-50">
               <span className="text-xs text-slate-400">
-                {pinned && index === 0 && filter === "전체" ? "고정 · " : ""}
+                {pinned && item.pinned ? "고정 · " : ""}
                 {item.category} · {item.createdAt}
               </span>
               <span className="text-sm font-medium text-slate-900">{item.title}</span>
@@ -76,9 +82,12 @@ function NoticeList({ pinned }: { pinned: boolean }) {
 }
 
 function FaqList() {
-  const faqs = useShared().faqs.filter((item) => !item.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const faqs = useShared()
+    .faqs.filter((item) => !item.deletedAt && item.visible)
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const [filter, setFilter] = useState<(typeof FAQ_FILTERS)[number]>("전체");
-  const visible = faqs.filter((item) => filter === "전체" || item.category === filter);
+  const shown = faqs.filter((item) => filter === "전체" || item.category === filter);
 
   return (
     <div id="faq" className="flex flex-col gap-4">
@@ -89,11 +98,11 @@ function FaqList() {
           </button>
         ))}
       </div>
-      {visible.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="text-sm text-slate-400">이 카테고리의 질문이 없어요.</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {visible.map((item) => (
+          {shown.map((item) => (
             <li key={item.id}>
               <Link href={`/support/faq/${item.id}`} className="flex flex-col gap-1 rounded-2xl border border-slate-200 px-4 py-4 hover:bg-slate-50">
                 <span className="text-xs text-slate-400">{item.category} · {item.createdAt}</span>

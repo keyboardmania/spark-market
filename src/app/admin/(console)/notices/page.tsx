@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { NoticesAdmin } from "@/components/spark/admin/ContentAdmin";
+import { NoticesAdmin } from "@/components/spark/admin/NoticesAdmin";
 
 export const metadata: Metadata = { title: "공지사항 관리" };
 

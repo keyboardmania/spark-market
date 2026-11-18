@@ -4,9 +4,7 @@ import { useShared } from "@/data/shared";
 import { WireframeFrame } from "@/features/wireframe/WireframeFrame";
 
 export function FaqDetailView({ id }: { id: string }) {
-  const faqs = useShared().faqs.filter((item) => !item.deletedAt);
-  const index = faqs.findIndex((item) => item.id === id);
-  const faq = index >= 0 ? faqs[index] : null;
+  const faq = useShared().faqs.find((item) => item.id === id && !item.deletedAt && item.visible) ?? null;
 
   if (!faq) {
     return (
@@ -20,7 +18,7 @@ export function FaqDetailView({ id }: { id: string }) {
     <WireframeFrame eyebrow="FAQ" title={faq.question} backHref="/support/boards/board-faq" backLabel="자주 묻는 질문">
       <div className="flex flex-col gap-6">
         <p className="text-xs text-slate-400">카테고리 · {faq.category}</p>
-        <p className="text-sm leading-7 text-slate-700">{faq.answer}</p>
+        <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">{faq.answer}</p>
       </div>
     </WireframeFrame>
   );

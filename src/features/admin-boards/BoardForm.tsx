@@ -5,7 +5,7 @@ import { FieldLabel } from "@/features/wireframe/FieldLabel";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 
 const FLAGS: { key: keyof Pick<BoardDraft, "userWrite" | "media" | "fixed" | "reservation" | "used">; label: string }[] = [
-  { key: "userWrite", label: "작성 권한" },
+  { key: "userWrite", label: "사용자 작성 가능 여부" },
   { key: "media", label: "미디어 사용" },
   { key: "fixed", label: "상단 고정" },
   { key: "reservation", label: "예약 게시" },
@@ -39,15 +39,16 @@ export function BoardForm({
       <FieldLabel label="게시판 이름">
         <input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} className={fieldClass} />
       </FieldLabel>
-      <fieldset className="flex flex-wrap gap-3">
+      <fieldset className="flex flex-col gap-2.5">
         {FLAGS.map((flag) => (
-          <label key={flag.key} className="flex items-center gap-2 text-sm text-slate-700">
+          <label key={flag.key} className="flex items-start gap-2 text-sm leading-5 text-slate-700">
             <input
               type="checkbox"
               checked={draft[flag.key]}
               onChange={(event) => onChange({ ...draft, [flag.key]: event.target.checked })}
+              className="mt-0.5 shrink-0"
             />
-            {flag.label}
+            <span className="min-w-0 break-keep">{flag.label}</span>
           </label>
         ))}
       </fieldset>

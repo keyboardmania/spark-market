@@ -6,8 +6,10 @@ import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { FAQ_CATEGORIES } from "@/data/mockData";
-import { addFaq, addNotice, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
+import { useShared } from "@/data/shared";
+
+export { NoticesAdmin } from "@/components/spark/admin/NoticesAdmin";
+export { FaqsAdmin } from "@/components/spark/admin/FaqsAdmin";
 
 const INQUIRY_FILTERS = ["전체", "미답변", "답변완료"] as const;
 type InquiryFilter = (typeof INQUIRY_FILTERS)[number];
@@ -159,144 +161,6 @@ export function InquiriesAdmin() {
           )}
         </Panel>
       </div>
-    </div>
-  );
-}
-
-export function NoticesAdmin() {
-  const shared = useShared();
-  const [notice, setNotice] = useState("");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [category, setCategory] = useState<"일반" | "정책변경" | "사기예방">("일반");
-  const liveNotices = shared.notices.filter((item) => !item.deletedAt);
-  const noticePage = useAdminPage(liveNotices.length, "notices");
-  const noticeRows = liveNotices.slice(noticePage.start, noticePage.start + noticePage.pageSize);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">NOTICES</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">공지사항 관리</h1>
-        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
-      </div>
-      <Panel title="공지 등록" description="삭제는 숨김 처리입니다.">
-        <form className="space-y-2" onSubmit={(event) => {
-          event.preventDefault();
-          if (!title.trim() || !body.trim()) return;
-          addNotice({ id: crypto.randomUUID(), category, title: title.trim(), body: body.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
-          setTitle("");
-          setBody("");
-          setNotice("공지를 추가했어요.");
-        }}>
-          <select value={category} onChange={(event) => setCategory(event.target.value as typeof category)} className={fieldClass}>
-            <option value="일반">일반</option>
-            <option value="정책변경">정책변경</option>
-            <option value="사기예방">사기예방</option>
-          </select>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="제목" className={fieldClass} />
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="내용" className={fieldClass} />
-          <button type="submit" className={primaryButtonClass}>공지 추가</button>
-        </form>
-      </Panel>
-      <Panel title="공지 목록" flush>
-        <DataTable>
-          <thead>
-            <tr>
-              <th className={thClass}>카테고리</th>
-              <th className={thClass}>제목</th>
-              <th className={thClass}>작성일</th>
-              <th className={thClass}>조치</th>
-            </tr>
-          </thead>
-          <tbody>
-            {noticeRows.map((item) => (
-              <tr key={item.id}>
-                <td className={tdClass}>{item.category}</td>
-                <td className={`${tdClass} font-medium text-slate-900`}>{item.title}</td>
-                <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
-                <td className={tdClass}>
-                  <button type="button" className={ghostButtonClass} onClick={() => softDeleteNotice(item.id)}>삭제</button>
-                </td>
-              </tr>
-            ))}
-            {liveNotices.length === 0 ? (
-              <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={4}>등록된 공지가 없어요.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </DataTable>
-        <AdminPager page={noticePage.page} pageCount={noticePage.pageCount} total={noticePage.total} pageSize={noticePage.pageSize} onPage={noticePage.setPage} />
-      </Panel>
-    </div>
-  );
-}
-
-export function FaqsAdmin() {
-  const shared = useShared();
-  const [notice, setNotice] = useState("");
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("회원");
-  const liveFaqs = shared.faqs.filter((item) => !item.deletedAt);
-  const faqPage = useAdminPage(liveFaqs.length, "faqs");
-  const faqRows = liveFaqs.slice(faqPage.start, faqPage.start + faqPage.pageSize);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">FAQ</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">FAQ 관리</h1>
-        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
-      </div>
-      <Panel title="FAQ 등록" description="최신순으로 보이고, 삭제는 숨김 처리입니다.">
-        <form className="space-y-2" onSubmit={(event) => {
-          event.preventDefault();
-          if (!question.trim() || !answer.trim()) return;
-          addFaq({ id: crypto.randomUUID(), category: faqCategory, question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
-          setQuestion("");
-          setAnswer("");
-          setNotice("FAQ를 추가했어요.");
-        }}>
-          <select value={faqCategory} onChange={(event) => setFaqCategory(event.target.value as (typeof FAQ_CATEGORIES)[number])} className={fieldClass}>
-            {FAQ_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="질문" className={fieldClass} />
-          <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="답변" className={fieldClass} />
-          <button type="submit" className={primaryButtonClass}>FAQ 추가</button>
-        </form>
-      </Panel>
-      <Panel title="FAQ 목록" flush>
-        <DataTable>
-          <thead>
-            <tr>
-              <th className={thClass}>카테고리</th>
-              <th className={thClass}>질문</th>
-              <th className={thClass}>작성일</th>
-              <th className={thClass}>조치</th>
-            </tr>
-          </thead>
-          <tbody>
-            {faqRows.map((item) => (
-              <tr key={item.id}>
-                <td className={tdClass}>{item.category}</td>
-                <td className={`${tdClass} font-medium text-slate-900`}>{item.question}</td>
-                <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
-                <td className={tdClass}>
-                  <button type="button" className={ghostButtonClass} onClick={() => softDeleteFaq(item.id)}>삭제</button>
-                </td>
-              </tr>
-            ))}
-            {liveFaqs.length === 0 ? (
-              <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={4}>등록된 FAQ가 없어요.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </DataTable>
-        <AdminPager page={faqPage.page} pageCount={faqPage.pageCount} total={faqPage.total} pageSize={faqPage.pageSize} onPage={faqPage.setPage} />
-      </Panel>
     </div>
   );
 }

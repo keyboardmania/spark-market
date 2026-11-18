@@ -83,7 +83,7 @@ export function ReviewsAdmin() {
                     {author ? <span className="text-xs text-slate-400">{author.email}</span> : null}
                   </td>
                   <td className={tdClass}>{productTitle(review.productId)}</td>
-                  <td className={tdClass}>{"★".repeat(review.rating)}</td>
+                  <td className={`${tdClass} tabular-nums`}>{review.rating.toFixed(1)}</td>
                   <td className={`${tdClass} tabular-nums`}>{review.createdAt}</td>
                   <td className={tdClass}>
                     <StatusPill tone="emerald">게시중</StatusPill>
@@ -141,7 +141,7 @@ function ReviewDetail({ review, onClose, onDelete }: { review: Review; onClose: 
       <DetailRows
         rows={[
           { label: "작성자", value: author ? `${review.author} · ${author.email}` : review.author },
-          { label: "별점", value: `${review.rating} / 5` },
+          { label: "별점", value: review.rating.toFixed(1) },
           { label: "리뷰 내용", value: review.text },
           { label: "작성일", value: review.createdAt },
           { label: "관련 거래", value: trade ? `${trade.id} · ${trade.buyerEmail} → ${trade.sellerEmail} · ${trade.status} · ${formatPrice(trade.amount)}` : review.orderId },

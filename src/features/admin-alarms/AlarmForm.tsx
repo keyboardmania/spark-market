@@ -12,7 +12,6 @@ export function AlarmForm({
   onCreate,
   onUpdate,
   onDelete,
-  onClear,
 }: {
   draft: AlarmDraft;
   selected: boolean;
@@ -21,7 +20,6 @@ export function AlarmForm({
   onCreate: () => void;
   onUpdate: () => void;
   onDelete: () => void;
-  onClear: () => void;
 }) {
   return (
     <form
@@ -50,9 +48,6 @@ export function AlarmForm({
         <textarea value={draft.body} onChange={(event) => onChange({ ...draft, body: event.target.value })} rows={4} className={fieldClass} />
       </FieldLabel>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={ghostButtonClass} onClick={onClear}>
-          새로 작성
-        </button>
         <button type="button" className={primaryButtonClass} onClick={onCreate}>
           등록
         </button>

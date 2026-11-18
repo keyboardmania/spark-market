@@ -2470,6 +2470,12 @@ export const USER_INQUIRIES: UserInquiry[] = [
 ];
 
 export type NoticeCategory = "일반" | "정책변경" | "사기예방";
+export type NoticePublishMode = "즉시" | "예약";
+
+export type NoticeImage = {
+  id: string;
+  url: string;
+};
 
 export type Notice = {
   id: string;
@@ -2478,12 +2484,57 @@ export type Notice = {
   body: string;
   createdAt: string;
   deletedAt: string | null;
+  publishMode: NoticePublishMode;
+  scheduledAt: string | null;
+  visible: boolean;
+  pinned: boolean;
+  endsAt: string | null;
+  images: NoticeImage[];
 };
 
 export const NOTICES: Notice[] = [
-  { id: "nt-3", category: "사기예방", title: "외부 메신저 결제 유도에 주의하세요", body: "Spark 채팅 밖 결제 요청은 사기일 수 있습니다. 안전결제만 이용해 주세요.", createdAt: "2026.10.27", deletedAt: null },
-  { id: "nt-2", category: "정책변경", title: "중개 수수료 안내", body: "판매자 정산 시 비구독 10%, Spark VIP 6%가 상품 금액에 적용됩니다. 요율은 결제 시점에 고정됩니다.", createdAt: "2026.10.20", deletedAt: null },
-  { id: "nt-1", category: "일반", title: "Spark 오픈 안내", body: "수집가 간 거래를 위한 C2C 마켓이 열렸습니다.", createdAt: "2026.10.01", deletedAt: null },
+  {
+    id: "nt-3",
+    category: "사기예방",
+    title: "외부 메신저 결제 유도에 주의하세요",
+    body: "Spark 채팅 밖 결제 요청은 사기일 수 있습니다. 안전결제만 이용해 주세요.",
+    createdAt: "2026.10.27",
+    deletedAt: null,
+    publishMode: "즉시",
+    scheduledAt: null,
+    visible: true,
+    pinned: true,
+    endsAt: null,
+    images: [],
+  },
+  {
+    id: "nt-2",
+    category: "정책변경",
+    title: "중개 수수료 안내",
+    body: "판매자 정산 시 비구독 10%, Spark VIP 6%가 상품 금액에 적용됩니다. 요율은 결제 시점에 고정됩니다.",
+    createdAt: "2026.10.20",
+    deletedAt: null,
+    publishMode: "즉시",
+    scheduledAt: null,
+    visible: true,
+    pinned: false,
+    endsAt: "2026.12.31 23:59",
+    images: [],
+  },
+  {
+    id: "nt-1",
+    category: "일반",
+    title: "Spark 오픈 안내",
+    body: "수집가 간 거래를 위한 C2C 마켓이 열렸습니다.",
+    createdAt: "2026.10.01",
+    deletedAt: null,
+    publishMode: "즉시",
+    scheduledAt: null,
+    visible: true,
+    pinned: false,
+    endsAt: null,
+    images: [],
+  },
 ];
 
 export const FAQ_CATEGORIES = ["회원", "상품", "거래", "결제", "배송", "환불", "정산"] as const;
@@ -2496,14 +2547,15 @@ export type Faq = {
   answer: string;
   createdAt: string;
   deletedAt: string | null;
+  visible: boolean;
 };
 
 export const FAQS: Faq[] = [
-  { id: "faq-5", category: "배송", question: "운송장은 어디서 확인하나요?", answer: "구매 내역에서 배송중 주문을 열면 운송장과 배송 조회를 볼 수 있습니다. 판매자는 결제완료 후 주문 상세에서 운송장을 등록합니다.", createdAt: "2026.11.02", deletedAt: null },
-  { id: "faq-4", category: "회원", question: "이메일과 닉네임은 바꿀 수 있나요?", answer: "이메일은 가입 후 바꿀 수 없습니다. 닉네임과 프로필 사진은 마이페이지에서 수정할 수 있어요.", createdAt: "2026.11.01", deletedAt: null },
-  { id: "faq-3", category: "거래", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 구매하기를 누르면 채팅이 열리고 판매자에게 수락 요청이 전송됩니다. 판매자가 수락하면 채팅의 결제하기로 안전결제를 진행합니다.", createdAt: "2026.10.27", deletedAt: null },
-  { id: "faq-2", category: "정산", question: "정산 수수료는 얼마인가요?", answer: "상품 금액 기준 비구독 10%, VIP 6%입니다. 배송비에는 수수료를 매기지 않습니다.", createdAt: "2026.10.18", deletedAt: null },
-  { id: "faq-1", category: "상품", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null },
+  { id: "faq-5", category: "배송", question: "운송장은 어디서 확인하나요?", answer: "구매 내역에서 배송중 주문을 열면 운송장과 배송 조회를 볼 수 있습니다. 판매자는 결제완료 후 주문 상세에서 운송장을 등록합니다.", createdAt: "2026.11.02", deletedAt: null, visible: true },
+  { id: "faq-4", category: "회원", question: "이메일과 닉네임은 바꿀 수 있나요?", answer: "이메일은 가입 후 바꿀 수 없습니다. 닉네임과 프로필 사진은 마이페이지에서 수정할 수 있어요.", createdAt: "2026.11.01", deletedAt: null, visible: true },
+  { id: "faq-3", category: "거래", question: "구매는 어디서 신청하나요?", answer: "상품 상세의 구매하기를 누르면 채팅이 열리고 판매자에게 수락 요청이 전송됩니다. 판매자가 수락하면 채팅의 결제하기로 안전결제를 진행합니다.", createdAt: "2026.10.27", deletedAt: null, visible: true },
+  { id: "faq-2", category: "정산", question: "정산 수수료는 얼마인가요?", answer: "상품 금액 기준 비구독 10%, VIP 6%입니다. 배송비에는 수수료를 매기지 않습니다.", createdAt: "2026.10.18", deletedAt: null, visible: true },
+  { id: "faq-1", category: "상품", question: "판매완료 상품은 목록에 나오나요?", answer: "기본 목록에서는 숨깁니다. 예약중 상품은 보입니다.", createdAt: "2026.10.12", deletedAt: null, visible: true },
 ];
 
 export type BoardPost = {

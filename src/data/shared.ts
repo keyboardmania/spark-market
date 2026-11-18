@@ -291,6 +291,13 @@ export function addFaq(faq: Faq) {
   emit({ ...state, faqs: [faq, ...state.faqs] });
 }
 
+export function updateFaq(id: string, patch: Omit<Faq, "id" | "createdAt" | "deletedAt">) {
+  emit({
+    ...state,
+    faqs: state.faqs.map((faq) => (faq.id === id ? { ...faq, ...patch } : faq)),
+  });
+}
+
 export function softDeleteFaq(id: string) {
   emit({
     ...state,
@@ -323,6 +330,13 @@ export function removeBoard(id: string) {
 
 export function addNotice(notice: Notice) {
   emit({ ...state, notices: [notice, ...state.notices] });
+}
+
+export function updateNotice(id: string, patch: Omit<Notice, "id" | "createdAt" | "deletedAt">) {
+  emit({
+    ...state,
+    notices: state.notices.map((notice) => (notice.id === id ? { ...notice, ...patch } : notice)),
+  });
 }
 
 export function softDeleteNotice(id: string) {
