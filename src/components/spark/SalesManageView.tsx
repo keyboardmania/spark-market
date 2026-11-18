@@ -39,7 +39,6 @@ const TONE: Record<string, string> = {
   거래취소: "bg-zinc-100 text-zinc-400",
   정산대기: "bg-amber-50 text-amber-800",
   정산완료: "bg-emerald-50 text-emerald-700",
-  정산취소: "bg-zinc-100 text-zinc-400",
 };
 
 function parseFilter(value: string | null): SaleFilter {
@@ -52,12 +51,13 @@ function parseFilter(value: string | null): SaleFilter {
 function orderPhase(status: OrderStatus): Exclude<SaleFilter, "ALL"> {
   if (status === "구매확정") return "DONE";
   if (status === "거래취소") return "CANCELLED";
+  if (status === "결제완료" || status === "배송중" || status === "배송완료") return "OPEN";
   return "OPEN";
 }
 
 function settlementState(status: OrderStatus) {
   if (status === "구매확정") return "정산완료";
-  if (status === "거래취소") return "정산취소";
+  if (status === "거래취소") return "거래완료";
   return "정산대기";
 }
 

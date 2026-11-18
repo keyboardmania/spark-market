@@ -9,7 +9,8 @@ import { useShared } from "@/data/shared";
 
 const NAV = [
   { href: "/admin", label: "대시보드 홈", exact: true },
-  { href: "/admin/products", label: "상품·카테고리 관리" },
+  { href: "/admin/products", label: "상품 관리" },
+  { href: "/admin/categories", label: "카테고리 관리" },
   { href: "/admin/members", label: "회원 관리" },
   { href: "/admin/chats", label: "채팅 관리" },
   { href: "/admin/trades", label: "거래·정산 관리" },
@@ -17,8 +18,11 @@ const NAV = [
   { href: "/admin/reviews", label: "리뷰 관리" },
   { href: "/admin/alarms", label: "알림 관리" },
   { href: "/admin/boards", label: "게시판 관리" },
+  { href: "/admin/inquiries", label: "문의 관리" },
+  { href: "/admin/notices", label: "공지사항 관리" },
+  { href: "/admin/faqs", label: "FAQ 관리" },
+  { href: "/admin/terms", label: "약관 관리" },
   { href: "/admin/operators", label: "운영자 계정 관리" },
-  { href: "/admin/desk", label: "문의·공지·FAQ·약관 관리" },
 ] as const;
 
 export function AdminConsole({ children }: { children: ReactNode }) {
@@ -36,7 +40,7 @@ export function AdminConsole({ children }: { children: ReactNode }) {
   return <AdminFrame session={authed}>{children}</AdminFrame>;
 }
 
-function AdminFrame({ children, session }: { children: ReactNode; session: { name: string; role: string } | null }) {
+function AdminFrame({ children, session }: { children: ReactNode; session: { loginId: string; role: string } | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, inquiries } = useAdmin();
@@ -73,7 +77,7 @@ function AdminFrame({ children, session }: { children: ReactNode; session: { nam
                 {item.href === "/admin/support" && openReports > 0 ? (
                   <span className={`rounded-full px-1.5 text-[10px] leading-4 ${active ? "bg-white text-slate-900" : "bg-rose-400 text-white"}`}>{openReports}</span>
                 ) : null}
-                {item.href === "/admin/desk" && openInquiries > 0 ? (
+                {item.href === "/admin/inquiries" && openInquiries > 0 ? (
                   <span className={`rounded-full px-1.5 text-[10px] leading-4 ${active ? "bg-white text-slate-900" : "bg-rose-400 text-white"}`}>{openInquiries}</span>
                 ) : null}
               </Link>
@@ -86,7 +90,7 @@ function AdminFrame({ children, session }: { children: ReactNode; session: { nam
           <p className="text-sm text-slate-500">
             {session ? (
               <>
-                <span className="font-medium text-slate-900">{session.name}</span>
+                <span className="font-medium text-slate-900">{session.loginId}</span>
                 <span className="mx-2 text-slate-300">·</span>
                 {session.role}
               </>

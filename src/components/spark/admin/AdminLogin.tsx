@@ -12,7 +12,7 @@ export function AdminLogin() {
   const pathname = usePathname();
   const { login, ready, session } = useAdmin();
   const mounted = useMounted();
-  const [email, setEmail] = useState<string>(ADMIN_DEMO.email);
+  const [loginId, setLoginId] = useState<string>(ADMIN_DEMO.loginId);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<AdminLoginFailure | null>(null);
 
@@ -22,7 +22,7 @@ export function AdminLogin() {
   }, [mounted, ready, session, pathname, router]);
 
   function submit() {
-    const result = login(email, password);
+    const result = login(loginId, password);
     if (!result.ok) {
       setError(result);
       return;
@@ -45,16 +45,16 @@ export function AdminLogin() {
             submit();
           }}
         >
-          <label className="block text-xs font-medium text-slate-500" htmlFor="admin-email">
-            이메일
+          <label className="block text-xs font-medium text-slate-500" htmlFor="admin-login-id">
+            아이디
           </label>
           <input
-            id="admin-email"
-            type="email"
+            id="admin-login-id"
+            type="text"
             autoComplete="username"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            aria-invalid={error?.field === "email"}
+            value={loginId}
+            onChange={(event) => setLoginId(event.target.value)}
+            aria-invalid={error?.field === "loginId"}
             className={fieldClass}
           />
           <label className="block text-xs font-medium text-slate-500" htmlFor="admin-password">
@@ -71,7 +71,7 @@ export function AdminLogin() {
           />
           {error ? (
             <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              이메일 또는 비밀번호가 올바르지 않습니다.
+              {error.message}
             </p>
           ) : null}
           <button type="submit" className={`${primaryButtonClass} w-full`}>
@@ -80,11 +80,11 @@ export function AdminLogin() {
         </form>
 
         <div className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
-          <p>데모 비밀번호는 {ADMIN_DEMO.password} 입니다.</p>
+          <p>데모 비밀번호는 {ADMIN_DEMO.password} 입니다. 로그인은 아이디로 합니다.</p>
           <ul className="mt-2 space-y-1">
             {ADMIN_ACCOUNTS.map((account) => (
               <li key={account.id}>
-                {account.role} · {account.email}
+                {account.role} · {account.loginId} · {account.email}
               </li>
             ))}
           </ul>

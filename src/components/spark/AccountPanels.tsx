@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertsPanel } from "@/components/spark/AlertsPanel";
 import { InfiniteSentinel, useInfiniteGrid } from "@/components/spark/GridPager";
 import { passwordIssue } from "@/components/spark/AuthScreens";
 import { ProductVisual } from "@/components/spark/ProductVisual";
@@ -95,10 +94,8 @@ export function AccountPanels() {
       {user ? (
         <>
           <ProfileForm />
-          <AlertsPanel />
           <BankPanel />
           <PasswordPanel />
-          <ReviewsPanel />
           <WithdrawPanel />
         </>
       ) : null}

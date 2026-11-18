@@ -39,7 +39,7 @@ export function OrderDetailView({ id }: { id: string }) {
   const handledQuery = useRef(false);
   const photoRef = useRef<HTMLInputElement>(null);
   const order = orders.find((item) => item.id === id);
-  const canRequest = Boolean(order && (order.status === "결제완료" || order.status === "배송완료") && !order.cancelRequest);
+  const canRequest = Boolean(order && (order.status === "결제완료" || order.status === "배송중" || order.status === "배송완료") && !order.cancelRequest);
 
   useEffect(() => {
     if (!mounted || handledQuery.current) return;
@@ -81,12 +81,11 @@ export function OrderDetailView({ id }: { id: string }) {
   const feeRate = order.feeRate ?? (user?.membership === "vip" ? 0.06 : 0.1);
   const fee = order.feeAmount ?? Math.round(itemPrice * feeRate * 100) / 100;
   const payout = order.payoutAmount ?? Math.round((itemPrice - fee) * 100) / 100;
-  const settlementStatus = order.status === "구매확정" ? "정산완료" : order.status === "거래취소" ? "정산취소" : "정산대기";
+  const settlementStatus = order.status === "구매확정" ? "정산완료" : order.status === "거래취소" ? "거래완료" : "정산대기";
   const feeLabel = feeRate <= 0.06 ? "중개 수수료 6% · Spark VIP" : "중개 수수료 10%";
   const detailLength = detail.trim().length;
   const canSubmit = reason !== "" && detailLength >= 10;
   const showCancelButton = !order.cancelRequest && order.status !== "구매확정" && order.status !== "거래취소";
-  const cancelDisabled = order.status === "배송중";
   const trade = orderTradePresentation(order.role, order.status);
 
   function openCancel() {
@@ -98,7 +97,7 @@ export function OrderDetailView({ id }: { id: string }) {
   function submitCancel() {
     if (!order || !canSubmit) return;
     const outcome = requestCancel(order.id, reason, detail.trim());
-    notify(outcome === "dispute" ? t("disputeFiled") : "취소 요청을 보냈어요.");
+    notify(outcome === "dispute" ? t("disputeFiled") : outcome === "cancel" ? "거래가 즉시 취소되었어요." : "취소할 수 없는 상태예요.");
     setCancelOpen(false);
   }
 
@@ -204,23 +203,43 @@ export function OrderDetailView({ id }: { id: string }) {
 
         {order.cancelRequest ? (
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <h2 className="text-sm font-medium text-slate-900">취소 요청</h2>
+            <h2 className="text-sm font-medium text-slate-900">
+              {order.cancelRequest.channel === "dispute" ? "분쟁(Dispute) 접수" : "거래 취소 상세"}
+            </h2>
             <dl className="mt-4 space-y-3 text-sm">
               <div>
-                <dt className="text-xs text-slate-400">사유</dt>
+                <dt className="text-xs text-slate-400">취소 사유</dt>
                 <dd className="mt-1 text-slate-700">{order.cancelRequest.reason}</dd>
               </div>
               <div>
-                <dt className="text-xs text-slate-400">상세 사유</dt>
+                <dt className="text-xs text-slate-400">상세 메시지</dt>
                 <dd className="mt-1 leading-6 text-slate-700">{order.cancelRequest.detail}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-400">요청 시각</dt>
                 <dd className="mt-1 text-slate-700">{formatRequestedAt(order.cancelRequest.requestedAt)}</dd>
               </div>
+              {order.cancelRequest.channel !== "dispute" ? (
+                <div>
+                  <dt className="text-xs text-slate-400">환불 안내</dt>
+                  <dd className="mt-1 leading-6 text-slate-700">
+                    결제 금액 {formatPrice(order.price)}은 결제 수단({order.paymentMethod})으로 자동 환불 예정이에요. 영업일 기준 1~3일 안에 반영됩니다.
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt className="text-xs text-slate-400">반송지 / 반송 조회</dt>
+                <dd className="mt-1 space-y-1 text-slate-700">
+                  <p>{order.address}</p>
+                  <p>{order.tracking ? `반송 운송장 ${order.tracking}` : "등록된 반송 운송장이 없어요."}</p>
+                </dd>
+              </div>
             </dl>
-            {order.cancelRequest.autoCancelled ? (
-              <p className="mt-4 text-sm text-slate-600">판매자 3일 미응답으로 자동 취소되었어요.</p>
+            {order.cancelRequest.autoCancelled && order.cancelRequest.channel !== "dispute" ? (
+              <p className="mt-4 text-sm text-slate-600">배송 완료 전 취소 요청으로 즉시 자동 취소되었어요.</p>
+            ) : null}
+            {order.cancelRequest.channel === "dispute" ? (
+              <p className="mt-4 text-sm text-amber-800">배송 완료 후 취소는 관리자 분쟁 대시보드로 자동 전송되었어요.</p>
             ) : null}
           </section>
         ) : null}
@@ -276,15 +295,15 @@ export function OrderDetailView({ id }: { id: string }) {
             <button type="button" onClick={() => photoRef.current?.click()} className="grid h-24 w-24 place-items-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-xs font-medium text-slate-600">
               {t("reviewPhoto")}
             </button>
-            <p className="text-xs text-slate-400">{t("reviewPhotoHint")}</p>
+            <p className="text-xs text-slate-400">사진만 최대 2장 첨부할 수 있어요.</p>
             <input
               ref={photoRef}
               type="file"
-              accept="image/png,image/jpeg,video/mp4,video/quicktime"
+              accept="image/png,image/jpeg"
               multiple
               className="sr-only"
               onChange={(event) => {
-                const files = Array.from(event.target.files ?? []).slice(0, 2);
+                const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/")).slice(0, 2);
                 event.target.value = "";
                 Promise.all(files.map((file) => new Promise<{ id: string; name: string; url: string }>((resolve) => {
                   const reader = new FileReader();
@@ -317,10 +336,10 @@ export function OrderDetailView({ id }: { id: string }) {
 
       {showCancelButton ? (
         <div className="mt-6">
-          <button type="button" disabled={cancelDisabled} onClick={openCancel} className={ghostButtonClass}>
+          <button type="button" onClick={openCancel} className={ghostButtonClass}>
             거래 취소 요청
           </button>
-          {cancelDisabled ? <p className="mt-2 text-xs text-slate-500">결제완료 또는 배송완료 상태에서만 취소할 수 있어요.</p> : null}
+          <p className="mt-2 text-xs text-slate-500">배송 완료 전 취소는 즉시 반영되고, 배송 완료 후에는 분쟁으로 접수됩니다. 구매 확정 이후에는 취소할 수 없어요.</p>
         </div>
       ) : null}
 
@@ -493,7 +512,7 @@ function CancelModal({
               className={fieldClass}
             />
           </label>
-          <p className="text-xs leading-5 text-slate-500">판매자 3일 미응답 시 자동 취소 처리됩니다.</p>
+          <p className="text-xs leading-5 text-slate-500">배송 완료 전이면 즉시 취소되고, 배송 완료 후면 관리자 분쟁으로 전달됩니다.</p>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className={ghostButtonClass}>
               닫기

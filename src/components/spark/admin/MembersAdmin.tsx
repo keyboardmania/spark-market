@@ -5,13 +5,12 @@ import { useAdmin } from "@/components/spark/AdminProvider";
 import { fieldClass } from "@/components/spark/styles";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { releaseUserSuspension, useShared, type LiveReport } from "@/data/shared";
+import { useShared, type LiveReport } from "@/data/shared";
 import { formatLocalStamp, type AdminMember, type MembershipStatus } from "@/data/mockData";
 
 export function MembersAdmin() {
-  const { members, setSuspended } = useAdmin();
+  const { members } = useAdmin();
   const shared = useShared();
-  const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [membership, setMembership] = useState<"전체" | MembershipStatus>("전체");
   const [activityFilter, setActivityFilter] = useState<"전체" | "정상" | "정지">("전체");
@@ -40,7 +39,7 @@ export function MembersAdmin() {
       <div>
         <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">MEMBERS</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">회원 관리</h1>
-        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+        <p className="mt-2 text-sm text-slate-500">신고 4회 누적 시 자동 정지됩니다. 수동 정지는 제공하지 않아요.</p>
       </div>
       <FilterBar>
         <FilterField label="회원 검색">
@@ -73,7 +72,6 @@ export function MembersAdmin() {
               <th className={thClass}>멤버십</th>
               <th className={thClass}>활동상태</th>
               <th className={thClass}>접속일</th>
-              <th className={thClass}>권한</th>
               <th className={thClass}>상세</th>
             </tr>
           </thead>
@@ -91,7 +89,6 @@ export function MembersAdmin() {
                     <StatusPill tone={activity.suspended ? "rose" : "sky"}>{activity.suspended ? "정지" : "정상"}</StatusPill>
                   </td>
                   <td className={`${tdClass} tabular-nums`}>{member.lastSeen}</td>
-                  <td className={tdClass}>{member.role}</td>
                   <td className={tdClass}>
                     <button
                       type="button"
@@ -109,7 +106,7 @@ export function MembersAdmin() {
             })}
             {shown.length === 0 ? (
               <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={7}>
+                <td className={`${tdClass} text-slate-400`} colSpan={6}>
                   표시할 회원이 없어요.
                 </td>
               </tr>
@@ -124,17 +121,6 @@ export function MembersAdmin() {
           reports={shared.reports}
           suspendedUntil={shared.suspendedUntil}
           onClose={() => setSelectedId(null)}
-          onToggle={() => {
-            const activity = activityOf(selected, shared.suspendedUntil);
-            if (activity.suspended) {
-              setSuspended(selected.id, false);
-              releaseUserSuspension(selected.id);
-              setNotice(`${selected.name} 님의 정지를 해제했어요.`);
-            } else {
-              setSuspended(selected.id, true);
-              setNotice(`${selected.name} 님의 활동을 정지했어요.`);
-            }
-          }}
         />
       ) : null}
     </div>
@@ -146,17 +132,18 @@ function MemberDetail({
   reports,
   suspendedUntil,
   onClose,
-  onToggle,
 }: {
   member: AdminMember;
   reports: LiveReport[];
   suspendedUntil: Record<string, string>;
   onClose: () => void;
-  onToggle: () => void;
 }) {
   const close = useMemo(() => onClose, [onClose]);
   const activity = activityOf(member, suspendedUntil);
   const strikes = reportCount(member, reports);
+  const releasedLabel = activity.until
+    ? formatLocalStamp(activity.until)
+    : member.releasedAt ?? "—";
   return (
     <DetailModal title="회원 상세" onClose={close}>
       <DetailRows
@@ -169,19 +156,11 @@ function MemberDetail({
           { label: "활동상태", value: activity.suspended ? "정지" : "정상" },
           { label: "접속일", value: member.lastSeen },
           { label: "가입일시", value: `${member.joinedAt} ${member.joinedTime}` },
-          { label: "권한", value: member.role },
-          { label: "신고 누적 횟수", value: `${strikes}회${activity.until ? ` · 정지 해제 ${formatLocalStamp(activity.until)}` : ""}` },
+          { label: "신고 누적 횟수", value: `${strikes}회` },
+          { label: "정지일시", value: member.suspendedAt ?? (activity.suspended ? "자동 정지" : "—") },
+          { label: "정지 해제 일시", value: activity.suspended || member.releasedAt ? `${releasedLabel} (자동 3일)` : "—" },
         ]}
       />
-      <div className="mt-4 flex justify-end">
-        <button
-          type="button"
-          onClick={onToggle}
-          className={activity.suspended ? "rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white" : "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700"}
-        >
-          {activity.suspended ? "정지 해제" : "활동 정지"}
-        </button>
-      </div>
     </DetailModal>
   );
 }
@@ -197,4 +176,3 @@ function reportCount(member: AdminMember, reports: LiveReport[]) {
   const live = reports.filter((report) => report.status === "수락" && report.category === "유저" && (keys.has(report.targetId) || keys.has(report.targetLabel))).length;
   return Math.max(member.reports, live);
 }
-

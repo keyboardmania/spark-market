@@ -1,26 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { PRODUCT_FLAGS, SALE_STATUSES, formatPrice, getProductById, sellerAccount, type SaleStatus } from "@/data/mockData";
 import { SaleStatusText } from "@/components/spark/Badges";
-import { useAdmin } from "@/components/spark/AdminProvider";
+import { ConfirmDialog } from "@/components/spark/ConfirmDialog";
 import { useSpark } from "@/components/spark/SparkProvider";
-import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/spark/styles";
+import { fieldClass } from "@/components/spark/styles";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { useShared, type LiveReport } from "@/data/shared";
 import { DELETE_BLOCKED_MESSAGE, productDeleteBlock } from "@/features/trade/productGuards";
 
 export function ProductsAdmin() {
-  const { categories, addCategory, updateCategory, deleteCategory } = useAdmin();
   const { products, rooms, orders, softDeleteProduct } = useSpark();
   const shared = useShared();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"전체" | SaleStatus | "금지/신고">("전체");
-  const [draft, setDraft] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
   const [notice, setNotice] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const flagged = new Map(PRODUCT_FLAGS.map((item) => [item.productId, item]));
   const sanctioned = shared.deletions.filter((item) => item.kind === "상품");
@@ -35,12 +33,13 @@ export function ProductsAdmin() {
   });
   const productPage = useAdminPage(visible.length, `${query}:${status}`);
   const productRows = visible.slice(productPage.start, productPage.start + productPage.pageSize);
+  const pending = products.find((product) => product.id === pendingDeleteId) ?? null;
 
   return (
     <div className="space-y-6">
       <div>
         <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">CATALOG</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">상품·카테고리 관리</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">상품 관리</h1>
         {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
         {sanctioned.length > 0 ? (
           <p className="mt-2 text-sm text-slate-500">
@@ -67,7 +66,7 @@ export function ProductsAdmin() {
 
       <Panel
         title="등록 매물"
-        description={`${visible.length}개 표시 · 예약 중이거나 거래가 진행 중인 상품은 상태를 바꾼 뒤에만 삭제할 수 있어요.`}
+        description={`${visible.length}개 표시 · 제목을 누르면 구매자용 상품 상세로 이동합니다.`}
         flush
       >
         <DataTable>
@@ -91,7 +90,9 @@ export function ProductsAdmin() {
               return (
                 <tr key={product.id}>
                   <td className={tdClass}>
-                    <span className="block font-medium text-slate-900">{product.title}</span>
+                    <Link href={`/products/${product.id}`} className="block font-medium text-slate-900 underline-offset-4 hover:underline">
+                      {product.title}
+                    </Link>
                     {flag ? (
                       <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                         <StatusPill tone={flag.flag === "금지" ? "rose" : "amber"}>{flag.flag}</StatusPill>
@@ -116,12 +117,7 @@ export function ProductsAdmin() {
                           setNotice(DELETE_BLOCKED_MESSAGE);
                           return;
                         }
-                        const removed = softDeleteProduct(product.id);
-                        if (!removed) {
-                          setNotice(DELETE_BLOCKED_MESSAGE);
-                          return;
-                        }
-                        setNotice(`${product.title} 매물을 삭제했어요. 데이터는 남고 사진·동영상은 3개월 후 삭제됩니다.`);
+                        setPendingDeleteId(product.id);
                       }}
                       className={block ? "rounded-full px-3 py-1.5 text-xs text-slate-400" : flag || strikes > 3 ? "rounded-full bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700" : "rounded-full px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"}
                     >
@@ -143,87 +139,24 @@ export function ProductsAdmin() {
         <AdminPager page={productPage.page} pageCount={productPage.pageCount} total={productPage.total} pageSize={productPage.pageSize} onPage={productPage.setPage} />
       </Panel>
 
-      <Panel title="카테고리" description="추가, 이름 수정, 삭제가 목록에 바로 반영됩니다.">
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const name = draft.trim();
-            if (!name) return;
-            if (categories.some((item) => item.name.localeCompare(name, "en", { sensitivity: "base" }) === 0)) {
-              setNotice("이미 있는 카테고리 이름은 등록할 수 없어요.");
+      {pending ? (
+        <ConfirmDialog
+          title="삭제하시겠습니까?"
+          body={`${pending.title} 매물을 삭제합니다. 데이터는 남고 사진·동영상은 3개월 후 삭제됩니다.`}
+          confirmLabel="삭제"
+          cancelLabel="취소"
+          onClose={() => setPendingDeleteId(null)}
+          onConfirm={() => {
+            const removed = softDeleteProduct(pending.id);
+            setPendingDeleteId(null);
+            if (!removed) {
+              setNotice(DELETE_BLOCKED_MESSAGE);
               return;
             }
-            addCategory(name);
-            setNotice(`${name} 카테고리를 추가했어요.`);
-            setDraft("");
+            setNotice(`${pending.title} 매물을 삭제했어요.`);
           }}
-        >
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="새 카테고리 이름" className={fieldClass} />
-          <button type="submit" className={primaryButtonClass} disabled={!draft.trim()}>
-            추가
-          </button>
-        </form>
-        <ul className="mt-4 divide-y divide-slate-100">
-          {categories.map((category) => {
-            const count = products.filter((product) => product.category === category.name).length;
-            const editing = editingId === category.id;
-            return (
-              <li key={category.id} className="flex flex-wrap items-center gap-3 py-3">
-                {editing ? (
-                  <input value={editingName} onChange={(event) => setEditingName(event.target.value)} className={`${fieldClass} max-w-xs`} />
-                ) : (
-                  <div className="min-w-40 flex-1">
-                    <p className="text-sm font-medium text-slate-900">{category.name}</p>
-                    <p className="text-xs text-slate-400">
-                      /{category.slug} · 매물 {count}개
-                    </p>
-                  </div>
-                )}
-                {editing ? (
-                  <button
-                    type="button"
-                    className={primaryButtonClass}
-                    onClick={() => {
-                      updateCategory(category.id, editingName);
-                      setEditingId(null);
-                      setNotice("카테고리 이름을 수정했어요.");
-                    }}
-                  >
-                    저장
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className={ghostButtonClass}
-                    onClick={() => {
-                      setEditingId(category.id);
-                      setEditingName(category.name);
-                    }}
-                  >
-                    수정
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="rounded-full px-4 py-3 text-sm text-rose-600 hover:bg-rose-50"
-                  onClick={() => {
-                    if (count > 0) {
-                      setNotice("등록된 상품이 있는 카테고리는 삭제할 수 없어요.");
-                      return;
-                    }
-                    deleteCategory(category.id);
-                    setNotice(`${category.name} 카테고리를 삭제했어요.`);
-                  }}
-                >
-                  삭제
-                </button>
-              </li>
-            );
-          })}
-          {categories.length === 0 ? <li className="py-4 text-sm text-slate-400">등록된 카테고리가 없어요.</li> : null}
-        </ul>
-      </Panel>
+        />
+      ) : null}
     </div>
   );
 }

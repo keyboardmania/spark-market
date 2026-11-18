@@ -15,11 +15,10 @@ import { useShared } from "@/data/shared";
 const NEXT_MEMBERSHIP_DATE = "2026.12.16";
 
 const TRADE_LINKS = [
-  { href: "/mypage/products", label: "내 상품 관리", hint: "수정, 삭제, 상태" },
+  { href: "/sellers/me", label: "내 상점", hint: "판매중·완료 상품과 리뷰" },
   { href: "/orders?tab=buy", label: "구매 내역", hint: "결제, 배송, 구매확정" },
   { href: "/orders?tab=sale", label: "판매 내역", hint: "배송, 거래완료" },
   { href: "/favorites", label: "찜한 상품", hint: "관심 매물" },
-  { href: "/sellers/me", label: "내 상점", hint: "판매 상품과 후기" },
   { href: "/mypage/reviews", label: "받은 리뷰", hint: "내가 받은 후기" },
   { href: "/chat", label: "1:1 채팅", hint: "거래 대화" },
 ] as const;
@@ -28,7 +27,8 @@ const SETTING_LINKS = [
   { href: "/mypage/profile", label: "회원 정보", hint: "닉네임과 사진" },
   { href: "/mypage/addresses", label: "배송지 관리", hint: "받는 주소" },
   { href: "/mypage/accounts", label: "계좌 관리", hint: "정산 계좌" },
-  { href: "/mypage/notifications", label: "알림", hint: "수신 설정과 알림함" },
+  { href: "/mypage/notifications?tab=settings", label: "알림 수신 설정", hint: "채팅·가격 하락" },
+  { href: "/mypage/notifications?tab=inbox", label: "알림함", hint: "받은 알림" },
   { href: "/mypage/password", label: "비밀번호", hint: "인증 후 변경" },
   { href: "/mypage/sanctions", label: "제재 내역", hint: "상점 제한" },
   { href: "/membership", label: "멤버십", hint: "Spark VIP" },
@@ -117,7 +117,7 @@ export function MyPageView() {
             </p>
             {signedIn ? (
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href="/sellers/me?tab=reviews" className="relative z-20 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">평균 별점 ★ {rating.toFixed(1)}</Link>
+                <Link href="/mypage/reviews" className="relative z-20 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">평균 별점 ★ {rating.toFixed(1)}</Link>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">다음 결제 예정일 {nextPayment}</span>
               </div>
             ) : null}

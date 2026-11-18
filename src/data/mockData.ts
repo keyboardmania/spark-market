@@ -1986,28 +1986,34 @@ export function formatTime(date = new Date()) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-export const ADMIN_DEMO = {
-  email: "admin@spark.market",
-  password: "sparkadmin",
-} as const;
+export type AdminRole = "슈퍼 관리자" | "관리자";
+export type AdminActivityStatus = "활동" | "정지";
 
 export type AdminAccount = {
   id: string;
-  name: string;
+  loginId: string;
   email: string;
-  role: "슈퍼 관리자" | "운영" | "고객지원";
+  role: AdminRole;
+  status: AdminActivityStatus;
   lastSeen: string;
+  joinedAt: string;
+  suspendedAt: string | null;
 };
 
 export const ADMIN_ACCOUNTS: AdminAccount[] = [
-  { id: "admin-ceo", name: "여도원", email: "admin@spark.market", role: "슈퍼 관리자", lastSeen: "2026.10.27 21:12" },
-  { id: "admin-ops", name: "하나", email: "hana@spark.market", role: "운영", lastSeen: "2026.10.27 18:40" },
-  { id: "admin-cs", name: "린", email: "rin@spark.market", role: "고객지원", lastSeen: "2026.10.26 22:15" },
+  { id: "admin-ceo", loginId: "sparkadmin", email: "admin@spark.market", role: "슈퍼 관리자", status: "활동", lastSeen: "2026.10.27 21:12", joinedAt: "2024.01.10 09:00", suspendedAt: null },
+  { id: "admin-ops", loginId: "hanaops", email: "hana@spark.market", role: "관리자", status: "활동", lastSeen: "2026.10.27 18:40", joinedAt: "2025.03.02 14:20", suspendedAt: null },
+  { id: "admin-cs", loginId: "rincs", email: "rin@spark.market", role: "관리자", status: "정지", lastSeen: "2026.10.26 22:15", joinedAt: "2025.06.18 11:05", suspendedAt: "2026.10.26 22:20" },
 ];
 
-export type MembershipStatus = "구독 중" | "미구독";
+export const ADMIN_DEMO = {
+  loginId: "sparkadmin",
+  email: "admin@spark.market",
+  password: "sparkadmin",
+  verifyCode: "123456",
+} as const;
 
-export type MemberRole = "회원" | "관리자";
+export type MembershipStatus = "구독 중" | "미구독";
 
 export type AdminMember = {
   id: string;
@@ -2021,20 +2027,21 @@ export type AdminMember = {
   ip: string;
   os: string;
   lastSeen: string;
-  role: MemberRole;
   suspended: boolean;
+  suspendedAt: string | null;
+  releasedAt: string | null;
   reports: number;
 };
 
 export const ADMIN_MEMBERS: AdminMember[] = [
-  { id: "mem-seoyeon", name: "김서연", email: "seoyeon@spark.market", adultVerified: true, joinedAt: "2026.10.27", joinedTime: "09:40", country: "한국", membership: "구독 중", ip: "211.234.18.42", os: "Windows 11 · Chrome 131", lastSeen: "2026.10.27 22:10", role: "회원", suspended: false, reports: 0 },
-  { id: "mem-minji", name: "박민지", email: "minji@spark.market", adultVerified: false, joinedAt: "2026.10.27", joinedTime: "08:15", country: "한국", membership: "미구독", ip: "121.140.72.15", os: "iOS 18.2 · Safari", lastSeen: "2026.10.27 18:02", role: "회원", suspended: false, reports: 0 },
-  { id: "mem-haru", name: "하루", email: "haru.court@spark.market", adultVerified: true, joinedAt: "2024.03.12", joinedTime: "11:20", country: "일본", membership: "구독 중", ip: "126.102.44.9", os: "macOS 15.1 · Safari", lastSeen: "2026.10.26 07:41", role: "회원", suspended: false, reports: 0 },
-  { id: "mem-momo", name: "모모", email: "momo.ribbon@spark.market", adultVerified: true, joinedAt: "2024.11.02", joinedTime: "16:05", country: "일본", membership: "구독 중", ip: "133.32.18.77", os: "Android 15 · Chrome", lastSeen: "2026.10.27 12:33", role: "회원", suspended: false, reports: 0 },
-  { id: "mem-slab", name: "카드서랍", email: "slab.drawer@spark.market", adultVerified: true, joinedAt: "2025.01.19", joinedTime: "13:48", country: "미국", membership: "미구독", ip: "104.28.91.6", os: "Windows 10 · Edge 131", lastSeen: "2026.10.25 20:18", role: "회원", suspended: false, reports: 1 },
-  { id: "mem-chii", name: "치이", email: "chii.pocket@spark.market", adultVerified: true, joinedAt: "2023.08.30", joinedTime: "10:02", country: "한국", membership: "구독 중", ip: "175.223.40.118", os: "iPadOS 18.1 · Safari", lastSeen: "2026.10.27 09:55", role: "회원", suspended: false, reports: 0 },
-  { id: "mem-orange", name: "오렌지코트", email: "orange.coat@spark.market", adultVerified: true, joinedAt: "2025.06.14", joinedTime: "19:27", country: "미국", membership: "미구독", ip: "172.56.11.203", os: "Android 14 · Samsung Internet", lastSeen: "2026.10.24 21:10", role: "회원", suspended: false, reports: 3 },
-  { id: "mem-sora", name: "소라", email: "sora@spark.market", adultVerified: false, joinedAt: "2026.09.03", joinedTime: "14:36", country: "중국", membership: "미구독", ip: "39.7.22.154", os: "macOS 14.6 · Chrome 130", lastSeen: "2026.10.22 11:04", role: "회원", suspended: false, reports: 0 },
+  { id: "mem-seoyeon", name: "김서연", email: "seoyeon@spark.market", adultVerified: true, joinedAt: "2026.10.27", joinedTime: "09:40", country: "한국", membership: "구독 중", ip: "211.234.18.42", os: "Windows 11 · Chrome 131", lastSeen: "2026.10.27 22:10", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
+  { id: "mem-minji", name: "박민지", email: "minji@spark.market", adultVerified: false, joinedAt: "2026.10.27", joinedTime: "08:15", country: "한국", membership: "미구독", ip: "121.140.72.15", os: "iOS 18.2 · Safari", lastSeen: "2026.10.27 18:02", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
+  { id: "mem-haru", name: "하루", email: "haru.court@spark.market", adultVerified: true, joinedAt: "2024.03.12", joinedTime: "11:20", country: "일본", membership: "구독 중", ip: "126.102.44.9", os: "macOS 15.1 · Safari", lastSeen: "2026.10.26 07:41", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
+  { id: "mem-momo", name: "모모", email: "momo.ribbon@spark.market", adultVerified: true, joinedAt: "2024.11.02", joinedTime: "16:05", country: "일본", membership: "구독 중", ip: "133.32.18.77", os: "Android 15 · Chrome", lastSeen: "2026.10.27 12:33", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
+  { id: "mem-slab", name: "카드서랍", email: "slab.drawer@spark.market", adultVerified: true, joinedAt: "2025.01.19", joinedTime: "13:48", country: "미국", membership: "미구독", ip: "104.28.91.6", os: "Windows 10 · Edge 131", lastSeen: "2026.10.25 20:18", suspended: false, suspendedAt: null, releasedAt: null, reports: 1 },
+  { id: "mem-chii", name: "치이", email: "chii.pocket@spark.market", adultVerified: true, joinedAt: "2023.08.30", joinedTime: "10:02", country: "한국", membership: "구독 중", ip: "175.223.40.118", os: "iPadOS 18.1 · Safari", lastSeen: "2026.10.27 09:55", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
+  { id: "mem-orange", name: "오렌지코트", email: "orange.coat@spark.market", adultVerified: true, joinedAt: "2025.06.14", joinedTime: "19:27", country: "미국", membership: "미구독", ip: "172.56.11.203", os: "Android 14 · Samsung Internet", lastSeen: "2026.10.24 21:10", suspended: true, suspendedAt: "2026.10.24 21:15", releasedAt: "2026.10.27 21:15", reports: 4 },
+  { id: "mem-sora", name: "소라", email: "sora@spark.market", adultVerified: false, joinedAt: "2026.09.03", joinedTime: "14:36", country: "중국", membership: "미구독", ip: "39.7.22.154", os: "macOS 14.6 · Chrome 130", lastSeen: "2026.10.22 11:04", suspended: false, suspendedAt: null, releasedAt: null, reports: 0 },
 ];
 
 export function sellerAccount(sellerId: string) {
@@ -2082,19 +2089,38 @@ export function needsCustomsNumber(product: { category?: string; country?: strin
   return categoryOverseas || addressOverseas;
 }
 
+export type AdminCategoryKind = "product" | "board";
+
 export type AdminCategory = {
   id: string;
+  kind: AdminCategoryKind;
   name: string;
   slug: string;
+  parentId: string | null;
+  deletedAt: string | null;
 };
 
 export const ADMIN_CATEGORIES: AdminCategory[] = [
-  { id: "cat-figure", name: "피규어/프라모델", slug: "figure" },
-  { id: "cat-tcg", name: "TCG", slug: "tcg" },
-  { id: "cat-lego", name: "레고", slug: "lego" },
-  { id: "cat-art", name: "아트토이", slug: "art-toy" },
-  { id: "cat-doll", name: "인형", slug: "doll" },
-  { id: "cat-fidget", name: "스퀴시/피젯토이", slug: "fidget" },
+  { id: "cat-figure", kind: "product", name: "피규어/프라모델", slug: "figure", parentId: null, deletedAt: null },
+  { id: "cat-tcg", kind: "product", name: "TCG", slug: "tcg", parentId: null, deletedAt: null },
+  { id: "cat-lego", kind: "product", name: "레고", slug: "lego", parentId: null, deletedAt: null },
+  { id: "cat-art", kind: "product", name: "아트토이", slug: "art-toy", parentId: null, deletedAt: null },
+  { id: "cat-doll", kind: "product", name: "인형", slug: "doll", parentId: null, deletedAt: null },
+  { id: "cat-fidget", kind: "product", name: "스퀴시/피젯토이", slug: "fidget", parentId: null, deletedAt: null },
+  { id: "cat-figure-scale", kind: "product", name: "스케일", slug: "figure-scale", parentId: "cat-figure", deletedAt: null },
+  { id: "cat-figure-nendo", kind: "product", name: "넨도로이드", slug: "figure-nendo", parentId: "cat-figure", deletedAt: null },
+  { id: "cat-figure-scale-18", kind: "product", name: "1/8", slug: "figure-scale-18", parentId: "cat-figure-scale", deletedAt: null },
+  { id: "cat-figure-scale-17", kind: "product", name: "1/7", slug: "figure-scale-17", parentId: "cat-figure-scale", deletedAt: null },
+  { id: "cat-figure-scale-18-painted", kind: "product", name: "도장완료", slug: "figure-scale-18-painted", parentId: "cat-figure-scale-18", deletedAt: null },
+  { id: "cat-tcg-pokemon", kind: "product", name: "포켓몬", slug: "tcg-pokemon", parentId: "cat-tcg", deletedAt: null },
+  { id: "cat-tcg-yugioh", kind: "product", name: "유희왕", slug: "tcg-yugioh", parentId: "cat-tcg", deletedAt: null },
+  { id: "bcat-support", kind: "board", name: "고객센터", slug: "support", parentId: null, deletedAt: null },
+  { id: "bcat-notice", kind: "board", name: "공지", slug: "notice", parentId: "bcat-support", deletedAt: null },
+  { id: "bcat-faq", kind: "board", name: "FAQ", slug: "faq", parentId: "bcat-support", deletedAt: null },
+  { id: "bcat-inquiry", kind: "board", name: "1:1 문의", slug: "inquiry", parentId: "bcat-support", deletedAt: null },
+  { id: "bcat-community", kind: "board", name: "커뮤니티", slug: "community", parentId: null, deletedAt: null },
+  { id: "bcat-community-free", kind: "board", name: "자유게시판", slug: "community-free", parentId: "bcat-community", deletedAt: null },
+  { id: "bcat-community-trade", kind: "board", name: "거래후기", slug: "community-trade", parentId: "bcat-community", deletedAt: null },
 ];
 
 export const PRODUCT_FLAGS = [
@@ -2700,28 +2726,52 @@ export type AppNotification = {
 
 export const SEED_NOTIFICATIONS: AppNotification[] = [
   {
-    id: "ntf-nego-rukia",
-    kind: "네고",
-    text: "소라님이 '블리치 루키아 아크릴 스탠드' 상품에 가격 제안(네고)을 했습니다.",
-    createdAt: "10:24",
-    isRead: false,
-    href: "/chat/room-rukia-sale",
-  },
-  {
-    id: "ntf-pay-usagi",
-    kind: "거래",
-    text: "먼작귀 우사기 미니 피규어 상품 결제가 완료되었습니다.",
-    createdAt: "09:02",
-    isRead: false,
-    href: "/orders/SPK-240050",
-  },
-  {
     id: "ntf-chat-slab",
     kind: "채팅",
     text: "카드서랍님의 채팅 메시지가 도착했습니다.",
+    createdAt: "방금",
+    isRead: false,
+    href: "/chat/room-charizard",
+  },
+  {
+    id: "ntf-price-rukia",
+    kind: "가격하락",
+    text: "'블리치 루키아 아크릴 스탠드' 가격이 $42 → $38로 내려갔어요.",
+    createdAt: "10:24",
+    isRead: false,
+    href: "/products/bl-rukia-stand",
+  },
+  {
+    id: "ntf-chat-haru",
+    kind: "채팅",
+    text: "하루님의 채팅 메시지가 도착했습니다.",
+    createdAt: "09:40",
+    isRead: false,
+    href: "/chat/room-hinata",
+  },
+  {
+    id: "ntf-price-kuromi",
+    kind: "가격하락",
+    text: "'쿠로미 인형 세트' 가격이 $55 → $49로 내려갔어요.",
     createdAt: "어제",
     isRead: true,
-    href: "/chat/room-charizard",
+    href: "/products/sanrio-kuromi-set",
+  },
+  {
+    id: "ntf-chat-momo",
+    kind: "채팅",
+    text: "모모님의 채팅 메시지가 도착했습니다.",
+    createdAt: "어제",
+    isRead: true,
+    href: "/chat/room-hinata",
+  },
+  {
+    id: "ntf-price-usagi",
+    kind: "가격하락",
+    text: "'먼작귀 우사기 미니 피규어' 가격이 $36 → $32로 내려갔어요.",
+    createdAt: "2일 전",
+    isRead: true,
+    href: "/products/chii-usagi-mini",
   },
 ];
 
@@ -2734,8 +2784,7 @@ export type NotificationSetting = {
 
 export const NOTIFICATION_CHANNELS = [
   { alarmId: "alarm-chat", label: "채팅 메시지 알림", kinds: ["채팅"] },
-  { alarmId: "alarm-nego", label: "가격 제안(네고) 및 입찰 알림", kinds: ["네고"] },
-  { alarmId: "alarm-trade", label: "결제 및 거래 진행 상태 알림", kinds: ["거래"] },
+  { alarmId: "alarm-price", label: "가격 하락 알림", kinds: ["가격하락"] },
 ] as const satisfies readonly { alarmId: string; label: string; kinds: readonly NotificationKind[] }[];
 
 export function seedNotificationSettings(userUuid = "guest"): NotificationSetting[] {

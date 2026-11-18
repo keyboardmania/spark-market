@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export const ADMIN_PAGE_SIZE = 10;
+export const ADMIN_PAGE_SIZE = 20;
 
 export type AdminPageQuery = {
   page: number;

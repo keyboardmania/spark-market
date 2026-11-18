@@ -269,7 +269,7 @@ function ProfileMenu({
     >
       <p className="truncate px-4 py-3 text-sm font-medium text-slate-900">{user.name}</p>
       <ProfileLink href="/mypage" onPick={() => setOpen(false)}>{labels.mypage}</ProfileLink>
-      <ProfileLink href="/mypage/products" onPick={() => setOpen(false)}>{t("menuProducts")}</ProfileLink>
+      <ProfileLink href="/sellers/me" onPick={() => setOpen(false)}>{t("menuProducts")}</ProfileLink>
       <ProfileLink href="/orders?tab=buy" onPick={() => setOpen(false)}>{t("menuPurchases")}</ProfileLink>
       <ProfileLink href="/orders?tab=sale" onPick={() => setOpen(false)}>{t("menuSales")}</ProfileLink>
       <ProfileLink href="/favorites" onPick={() => setOpen(false)}>{t("menuFavorites")}</ProfileLink>
@@ -349,6 +349,7 @@ function NotificationBell({
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const unread = notifications.filter((item) => !item.isRead).length;
+  const preview = notifications.slice(0, 5);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -414,10 +415,10 @@ function NotificationBell({
         </div>
       </div>
       <ul className="max-h-96 overflow-y-auto">
-        {notifications.length === 0 ? (
+        {preview.length === 0 ? (
           <li className="px-4 py-10 text-center text-sm text-slate-400">알림이 없어요.</li>
         ) : (
-          notifications.map((item) => (
+          preview.map((item) => (
             <li key={item.id} className={`flex items-start ${item.isRead ? "" : "bg-rose-50/60"}`}>
               <button type="button" onClick={() => openItem(item)} className="flex min-w-0 flex-1 gap-3 px-4 py-3 text-left hover:bg-slate-50">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-transparent" : "bg-rose-500"}`} />
@@ -441,6 +442,20 @@ function NotificationBell({
           ))
         )}
       </ul>
+      {notifications.length > 5 ? (
+        <div className="border-t border-slate-100 px-4 py-3">
+          <button
+            type="button"
+            className="w-full text-center text-xs font-medium text-slate-600 hover:text-slate-900"
+            onClick={() => {
+              onOpenChange(false);
+              router.push("/mypage/notifications?tab=inbox");
+            }}
+          >
+            알림함 전체 보기
+          </button>
+        </div>
+      ) : null}
     </div>
   ) : null;
 

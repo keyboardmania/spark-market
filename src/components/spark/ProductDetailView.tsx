@@ -112,10 +112,10 @@ export function ProductDetailView({ id, initialProduct }: { id: string; initialP
 
         {reserved ? <p className="mt-4 text-sm text-amber-700">예약 중이에요. 판매자에게 먼저 메시지를 남겨 주세요.</p> : null}
         {sold ? <p className="mt-4 text-sm text-slate-400">판매가 완료된 매물이에요.</p> : null}
-        {product.sellerId === "me" ? (
+        {mine ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href={`/sell/${product.id}`} className={ghostButtonClass}>수정</Link>
-            <DeleteProductButton product={product} onDeleted={() => router.push("/orders?tab=sale")} />
+            <Link href={`/sell/${product.id}`} className={primaryButtonClass}>수정</Link>
+            <DeleteProductButton product={product} onDeleted={() => router.push("/sellers/me")} />
           </div>
         ) : null}
 

@@ -8,9 +8,8 @@ import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spa
 import { FAQ_CATEGORIES } from "@/data/mockData";
 import { addFaq, addNotice, addTerm, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
 
-export function ContentAdmin() {
+export function InquiriesAdmin() {
   const { inquiries, replyInquiry } = useAdmin();
-  const shared = useShared();
   const [selectedId, setSelectedId] = useState(inquiries.find((item) => item.status === "미답변")?.id ?? inquiries[0]?.id ?? "");
   const [reply, setReply] = useState("");
   const [notice, setNotice] = useState("");
@@ -21,8 +20,8 @@ export function ContentAdmin() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">DESK</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">문의·공지·FAQ·약관 관리</h1>
+        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">INQUIRIES</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">문의 관리</h1>
         {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
       </div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -84,74 +83,35 @@ export function ContentAdmin() {
           )}
         </Panel>
       </div>
-      <ContentDesk notice={setNotice} faqs={shared.faqs} notices={shared.notices} terms={shared.terms} />
     </div>
   );
 }
 
-function ContentDesk({
-  notice,
-  faqs,
-  notices,
-  terms,
-}: {
-  notice: (message: string) => void;
-  faqs: ReturnType<typeof useShared>["faqs"];
-  notices: ReturnType<typeof useShared>["notices"];
-  terms: ReturnType<typeof useShared>["terms"];
-}) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("회원");
+export function NoticesAdmin() {
+  const shared = useShared();
+  const [notice, setNotice] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [category, setCategory] = useState<"일반" | "정책변경" | "사기예방">("일반");
-  const [termTitle, setTermTitle] = useState("");
-  const [termBody, setTermBody] = useState("");
-  const liveFaqs = faqs.filter((item) => !item.deletedAt);
-  const liveNotices = notices.filter((item) => !item.deletedAt);
-  const faqPage = useAdminPage(liveFaqs.length, "faqs");
+  const liveNotices = shared.notices.filter((item) => !item.deletedAt);
   const noticePage = useAdminPage(liveNotices.length, "notices");
-  const termPage = useAdminPage(terms.length, "terms");
-  const faqRows = liveFaqs.slice(faqPage.start, faqPage.start + faqPage.pageSize);
   const noticeRows = liveNotices.slice(noticePage.start, noticePage.start + noticePage.pageSize);
-  const termRows = terms.slice(termPage.start, termPage.start + termPage.pageSize);
+
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <Panel title="FAQ" description="최신순으로 보이고, 삭제는 숨김 처리입니다.">
-        <form className="space-y-2" onSubmit={(event) => {
-          event.preventDefault();
-          if (!question.trim() || !answer.trim()) return;
-          addFaq({ id: crypto.randomUUID(), category: faqCategory, question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
-          setQuestion("");
-          setAnswer("");
-          notice("FAQ를 추가했어요.");
-        }}>
-          <select value={faqCategory} onChange={(event) => setFaqCategory(event.target.value as (typeof FAQ_CATEGORIES)[number])} className={fieldClass}>
-            {FAQ_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="질문" className={fieldClass} />
-          <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="답변" className={fieldClass} />
-          <button type="submit" className={primaryButtonClass}>FAQ 추가</button>
-        </form>
-        <ul className="mt-4 space-y-2">
-          {faqRows.map((item) => (
-            <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
-              <span>{item.question}</span>
-              <button type="button" className={ghostButtonClass} onClick={() => softDeleteFaq(item.id)}>삭제</button>
-            </li>
-          ))}
-        </ul>
-        <AdminPager page={faqPage.page} pageCount={faqPage.pageCount} total={faqPage.total} pageSize={faqPage.pageSize} onPage={faqPage.setPage} />
-      </Panel>
-      <Panel title="공지" description="삭제는 숨김 처리입니다.">
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">NOTICES</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">공지사항 관리</h1>
+        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+      </div>
+      <Panel title="공지 등록" description="삭제는 숨김 처리입니다.">
         <form className="space-y-2" onSubmit={(event) => {
           event.preventDefault();
           if (!title.trim() || !body.trim()) return;
           addNotice({ id: crypto.randomUUID(), category, title: title.trim(), body: body.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
           setTitle("");
           setBody("");
-          notice("공지를 추가했어요.");
+          setNotice("공지를 추가했어요.");
         }}>
           <select value={category} onChange={(event) => setCategory(event.target.value as typeof category)} className={fieldClass}>
             <option value="일반">일반</option>
@@ -162,34 +122,167 @@ function ContentDesk({
           <textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="내용" className={fieldClass} />
           <button type="submit" className={primaryButtonClass}>공지 추가</button>
         </form>
-        <ul className="mt-4 space-y-2">
-          {noticeRows.map((item) => (
-            <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
-              <span>{item.category} · {item.title}</span>
-              <button type="button" className={ghostButtonClass} onClick={() => softDeleteNotice(item.id)}>삭제</button>
-            </li>
-          ))}
-        </ul>
+      </Panel>
+      <Panel title="공지 목록" flush>
+        <DataTable>
+          <thead>
+            <tr>
+              <th className={thClass}>카테고리</th>
+              <th className={thClass}>제목</th>
+              <th className={thClass}>작성일</th>
+              <th className={thClass}>조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            {noticeRows.map((item) => (
+              <tr key={item.id}>
+                <td className={tdClass}>{item.category}</td>
+                <td className={`${tdClass} font-medium text-slate-900`}>{item.title}</td>
+                <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
+                <td className={tdClass}>
+                  <button type="button" className={ghostButtonClass} onClick={() => softDeleteNotice(item.id)}>삭제</button>
+                </td>
+              </tr>
+            ))}
+            {liveNotices.length === 0 ? (
+              <tr>
+                <td className={`${tdClass} text-slate-400`} colSpan={4}>등록된 공지가 없어요.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </DataTable>
         <AdminPager page={noticePage.page} pageCount={noticePage.pageCount} total={noticePage.total} pageSize={noticePage.pageSize} onPage={noticePage.setPage} />
       </Panel>
-      <Panel title="약관" description="약관은 추가만 할 수 있습니다.">
+    </div>
+  );
+}
+
+export function FaqsAdmin() {
+  const shared = useShared();
+  const [notice, setNotice] = useState("");
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [faqCategory, setFaqCategory] = useState<(typeof FAQ_CATEGORIES)[number]>("회원");
+  const liveFaqs = shared.faqs.filter((item) => !item.deletedAt);
+  const faqPage = useAdminPage(liveFaqs.length, "faqs");
+  const faqRows = liveFaqs.slice(faqPage.start, faqPage.start + faqPage.pageSize);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">FAQ</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">FAQ 관리</h1>
+        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+      </div>
+      <Panel title="FAQ 등록" description="최신순으로 보이고, 삭제는 숨김 처리입니다.">
+        <form className="space-y-2" onSubmit={(event) => {
+          event.preventDefault();
+          if (!question.trim() || !answer.trim()) return;
+          addFaq({ id: crypto.randomUUID(), category: faqCategory, question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString().slice(0, 10), deletedAt: null });
+          setQuestion("");
+          setAnswer("");
+          setNotice("FAQ를 추가했어요.");
+        }}>
+          <select value={faqCategory} onChange={(event) => setFaqCategory(event.target.value as (typeof FAQ_CATEGORIES)[number])} className={fieldClass}>
+            {FAQ_CATEGORIES.map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="질문" className={fieldClass} />
+          <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="답변" className={fieldClass} />
+          <button type="submit" className={primaryButtonClass}>FAQ 추가</button>
+        </form>
+      </Panel>
+      <Panel title="FAQ 목록" flush>
+        <DataTable>
+          <thead>
+            <tr>
+              <th className={thClass}>카테고리</th>
+              <th className={thClass}>질문</th>
+              <th className={thClass}>작성일</th>
+              <th className={thClass}>조치</th>
+            </tr>
+          </thead>
+          <tbody>
+            {faqRows.map((item) => (
+              <tr key={item.id}>
+                <td className={tdClass}>{item.category}</td>
+                <td className={`${tdClass} font-medium text-slate-900`}>{item.question}</td>
+                <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
+                <td className={tdClass}>
+                  <button type="button" className={ghostButtonClass} onClick={() => softDeleteFaq(item.id)}>삭제</button>
+                </td>
+              </tr>
+            ))}
+            {liveFaqs.length === 0 ? (
+              <tr>
+                <td className={`${tdClass} text-slate-400`} colSpan={4}>등록된 FAQ가 없어요.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </DataTable>
+        <AdminPager page={faqPage.page} pageCount={faqPage.pageCount} total={faqPage.total} pageSize={faqPage.pageSize} onPage={faqPage.setPage} />
+      </Panel>
+    </div>
+  );
+}
+
+export function TermsAdmin() {
+  const shared = useShared();
+  const [notice, setNotice] = useState("");
+  const [termTitle, setTermTitle] = useState("");
+  const [termBody, setTermBody] = useState("");
+  const termPage = useAdminPage(shared.terms.length, "terms");
+  const termRows = shared.terms.slice(termPage.start, termPage.start + termPage.pageSize);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">TERMS</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">약관 관리</h1>
+        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+      </div>
+      <Panel title="약관 등록" description="약관은 추가만 할 수 있습니다.">
         <form className="space-y-2" onSubmit={(event) => {
           event.preventDefault();
           if (!termTitle.trim() || !termBody.trim()) return;
           addTerm({ id: crypto.randomUUID(), title: termTitle.trim(), body: termBody.trim(), createdAt: new Date().toISOString().slice(0, 10) });
           setTermTitle("");
           setTermBody("");
-          notice("약관 버전을 추가했어요.");
+          setNotice("약관 버전을 추가했어요.");
         }}>
           <input value={termTitle} onChange={(event) => setTermTitle(event.target.value)} placeholder="제목" className={fieldClass} />
           <textarea value={termBody} onChange={(event) => setTermBody(event.target.value)} placeholder="본문" className={fieldClass} />
           <button type="submit" className={primaryButtonClass}>약관 추가</button>
         </form>
-        <ul className="mt-4 space-y-2 text-sm text-slate-600">
-          {termRows.map((item) => <li key={item.id}>{item.createdAt} · {item.title}</li>)}
-        </ul>
+      </Panel>
+      <Panel title="약관 목록" flush>
+        <DataTable>
+          <thead>
+            <tr>
+              <th className={thClass}>작성일</th>
+              <th className={thClass}>제목</th>
+            </tr>
+          </thead>
+          <tbody>
+            {termRows.map((item) => (
+              <tr key={item.id}>
+                <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
+                <td className={`${tdClass} font-medium text-slate-900`}>{item.title}</td>
+              </tr>
+            ))}
+            {shared.terms.length === 0 ? (
+              <tr>
+                <td className={`${tdClass} text-slate-400`} colSpan={2}>등록된 약관이 없어요.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </DataTable>
         <AdminPager page={termPage.page} pageCount={termPage.pageCount} total={termPage.total} pageSize={termPage.pageSize} onPage={termPage.setPage} />
       </Panel>
     </div>
   );
+}
+
+/** @deprecated Use split admins instead */
+export function ContentAdmin() {
+  return <InquiriesAdmin />;
 }

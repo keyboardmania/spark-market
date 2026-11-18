@@ -678,8 +678,8 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
 
   const requestCancel = useCallback((id: string, reason: string, detail: string) => {
     const target = orders.find((order) => order.id === id);
-    if (!target || target.cancelRequest) return "ignored" as const;
-    if (target.status !== "결제완료" && target.status !== "배송완료") return "ignored" as const;
+    if (!target || target.cancelRequest || target.status === "구매확정" || target.status === "거래취소") return "ignored" as const;
+    if (target.status !== "결제완료" && target.status !== "배송중" && target.status !== "배송완료") return "ignored" as const;
     const dispute = target.status === "배송완료";
     if (dispute) {
       const buyer = target.role === "purchase" ? user?.name ?? "구매자" : target.counterpart;
@@ -693,23 +693,41 @@ export function SparkProvider({ children, initialLocale = "ko" }: { children: Re
         reason,
         detail,
       });
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === id
+            ? {
+                ...order,
+                cancelRequest: {
+                  reason,
+                  detail,
+                  requestedAt: new Date().toISOString(),
+                  channel: "dispute",
+                },
+              }
+            : order,
+        ),
+      );
+      return "dispute" as const;
     }
     setOrders((current) =>
       current.map((order) =>
         order.id === id
           ? {
               ...order,
+              status: "거래취소" as const,
               cancelRequest: {
                 reason,
                 detail,
                 requestedAt: new Date().toISOString(),
-                channel: dispute ? "dispute" : "cancel",
+                channel: "cancel",
+                autoCancelled: true,
               },
             }
           : order,
       ),
     );
-    return dispute ? "dispute" as const : "cancel" as const;
+    return "cancel" as const;
   }, [orders, user?.name]);
 
   useEffect(() => {
