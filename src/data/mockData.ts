@@ -2192,20 +2192,30 @@ export type AdminCategory = {
   deletedAt: string | null;
 };
 
+const PRODUCT_CATEGORY_ROOTS: AdminCategory[] = CATEGORY_ROUTES.map((route) => ({
+  id: `cat-${route.slug === "art-toy" ? "art" : route.slug}`,
+  kind: "product" as const,
+  name: route.label,
+  slug: route.slug,
+  parentId: null,
+  deletedAt: null,
+}));
+
+/** 상품 2분류: 국가(ORIGIN) — 각 대분류 하위에 동일하게 둡니다. */
+const PRODUCT_CATEGORY_COUNTRIES: AdminCategory[] = PRODUCT_CATEGORY_ROOTS.flatMap((root) =>
+  ORIGINS.map((origin) => ({
+    id: `${root.id}-${origin}`,
+    kind: "product" as const,
+    name: origin,
+    slug: `${root.slug}-${origin}`,
+    parentId: root.id,
+    deletedAt: null,
+  })),
+);
+
 export const ADMIN_CATEGORIES: AdminCategory[] = [
-  { id: "cat-figure", kind: "product", name: "피규어/프라모델", slug: "figure", parentId: null, deletedAt: null },
-  { id: "cat-tcg", kind: "product", name: "TCG", slug: "tcg", parentId: null, deletedAt: null },
-  { id: "cat-lego", kind: "product", name: "레고", slug: "lego", parentId: null, deletedAt: null },
-  { id: "cat-art", kind: "product", name: "아트토이", slug: "art-toy", parentId: null, deletedAt: null },
-  { id: "cat-doll", kind: "product", name: "인형", slug: "doll", parentId: null, deletedAt: null },
-  { id: "cat-fidget", kind: "product", name: "스퀴시/피젯토이", slug: "fidget", parentId: null, deletedAt: null },
-  { id: "cat-figure-scale", kind: "product", name: "스케일", slug: "figure-scale", parentId: "cat-figure", deletedAt: null },
-  { id: "cat-figure-nendo", kind: "product", name: "넨도로이드", slug: "figure-nendo", parentId: "cat-figure", deletedAt: null },
-  { id: "cat-figure-scale-18", kind: "product", name: "1/8", slug: "figure-scale-18", parentId: "cat-figure-scale", deletedAt: null },
-  { id: "cat-figure-scale-17", kind: "product", name: "1/7", slug: "figure-scale-17", parentId: "cat-figure-scale", deletedAt: null },
-  { id: "cat-figure-scale-18-painted", kind: "product", name: "도장완료", slug: "figure-scale-18-painted", parentId: "cat-figure-scale-18", deletedAt: null },
-  { id: "cat-tcg-pokemon", kind: "product", name: "포켓몬", slug: "tcg-pokemon", parentId: "cat-tcg", deletedAt: null },
-  { id: "cat-tcg-yugioh", kind: "product", name: "유희왕", slug: "tcg-yugioh", parentId: "cat-tcg", deletedAt: null },
+  ...PRODUCT_CATEGORY_ROOTS,
+  ...PRODUCT_CATEGORY_COUNTRIES,
   { id: "bcat-support", kind: "board", name: "고객센터", slug: "support", parentId: null, deletedAt: null },
   { id: "bcat-notice", kind: "board", name: "공지", slug: "notice", parentId: "bcat-support", deletedAt: null },
   { id: "bcat-faq", kind: "board", name: "FAQ", slug: "faq", parentId: "bcat-support", deletedAt: null },
@@ -2519,12 +2529,33 @@ export const BOARD_POSTS: BoardPost[] = [
 export type TermVersion = {
   id: string;
   title: string;
+  version: string;
+  author: string;
+  /** HTML 본문 — 정적 HTML 라우팅/상세 렌더에 사용 */
   body: string;
   createdAt: string;
+  slug: string;
 };
 
 export const TERMS_VERSIONS: TermVersion[] = [
-  { id: "term-1", title: "Spark 이용약관", body: "거래 대금은 구매 확정까지 안전결제로 예치됩니다. 약관은 추가만 가능하고 수정·삭제하지 않습니다.", createdAt: "2026.10.01" },
+  {
+    id: "term-1",
+    title: "Spark 이용약관",
+    version: "1.0.0",
+    author: "슈퍼관리자",
+    slug: "terms",
+    createdAt: "2026.10.01",
+    body: `<section><h2>이용약관</h2><p>Spark는 수집가가 피규어, TCG, 레고, 아트토이, 인형, 스퀴시를 서로 사고팔 수 있도록 연결하는 C2C 플랫폼입니다.</p><p>거래 대금은 구매 확정까지 안전결제로 예치됩니다. 약관은 HTML로 관리되며 버전 단위로 추가됩니다.</p><ul><li>정확한 상품 상태와 사진을 등록해야 합니다.</li><li>욕설, 사칭, 직거래 유도는 이용이 제한됩니다.</li></ul></section>`,
+  },
+  {
+    id: "term-2",
+    title: "개인정보 처리방침",
+    version: "1.1.0",
+    author: "슈퍼관리자",
+    slug: "privacy",
+    createdAt: "2026.10.10",
+    body: `<section><h2>개인정보 처리방침</h2><p>회원 이메일, 닉네임, 거래 기록은 서비스 운영과 정산 목적으로만 사용합니다.</p><p>문의·신고 처리 시 필요한 범위에서만 열람하며, 보관 기간이 지나면 삭제합니다.</p></section>`,
+  },
 ];
 
 export type Review = {

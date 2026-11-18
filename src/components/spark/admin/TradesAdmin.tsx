@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ADMIN_TRADE_STATUSES, SETTLEMENT_STATUSES, formatPrice, getProductById, type AdminTrade, type AdminTradeStatus } from "@/data/mockData";
+import { formatPrice, getProductById, type AdminTrade, type AdminTradeStatus } from "@/data/mockData";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { fieldClass } from "@/components/spark/styles";
@@ -12,30 +12,20 @@ const PHASES = ["진행 중", "구매 확정", "취소", "분쟁"] as const;
 type TradePhase = (typeof PHASES)[number];
 
 export function TradesAdmin() {
-  const { trades, setTradeStatus, settlements, approveSettlement } = useAdmin();
+  const { trades, setTradeStatus } = useAdmin();
   const disputes = useShared().disputes;
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"전체" | TradePhase>("전체");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [settleEmail, setSettleEmail] = useState("");
-  const [settleStatus, setSettleStatus] = useState("전체");
   const shown = trades.filter((trade) => {
     const needle = email.trim().toLowerCase();
     const emailMatch = !needle || `${trade.buyerEmail} ${trade.sellerEmail}`.toLowerCase().includes(needle);
     return emailMatch && (status === "전체" || tradePhase(trade.status) === status);
   });
   const selected = trades.find((trade) => trade.id === selectedId) ?? null;
-  const settleNeedle = settleEmail.trim().toLowerCase();
-  const shownSettlements = settlements
-    .filter((item) => (!settleNeedle || item.email.toLowerCase().includes(settleNeedle)) && (settleStatus === "전체" || item.status === settleStatus))
-    .slice()
-    .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
-  const waiting = shownSettlements.filter((item) => item.status === "정산대기").length;
   const tradePage = useAdminPage(shown.length, `${email}:${status}`);
   const tradeRows = shown.slice(tradePage.start, tradePage.start + tradePage.pageSize);
-  const settlePage = useAdminPage(shownSettlements.length, `${settleEmail}:${settleStatus}`);
-  const settleRows = shownSettlements.slice(settlePage.start, settlePage.start + settlePage.pageSize);
   const disputePage = useAdminPage(disputes.length, "disputes");
   const disputeRows = disputes.slice(disputePage.start, disputePage.start + disputePage.pageSize);
 
@@ -49,8 +39,8 @@ export function TradesAdmin() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">SETTLEMENT</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">거래·정산 관리</h1>
+        <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">TRADES</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">거래 관리</h1>
         {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -64,7 +54,7 @@ export function TradesAdmin() {
           ))}
         </select>
       </div>
-      <Panel title="분쟁" description="배송 완료 후 취소는 이 목록으로 자동 접수됩니다. 관리자가 상태를 분쟁으로 바꾸지 않아도 여기 쌓입니다." flush>
+      <Panel title="분쟁" description="배송 완료 후 취소는 이 목록으로 자동 접수됩니다." flush>
         <DataTable>
           <thead>
             <tr>
@@ -84,12 +74,16 @@ export function TradesAdmin() {
                 <td className={tdClass}>{dispute.buyer}</td>
                 <td className={tdClass}>{dispute.seller}</td>
                 <td className={tdClass}>{dispute.reason}</td>
-                <td className={tdClass}><StatusPill tone="amber">{dispute.status}</StatusPill></td>
+                <td className={tdClass}>
+                  <StatusPill tone="amber">{dispute.status}</StatusPill>
+                </td>
               </tr>
             ))}
             {disputes.length === 0 ? (
               <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={6}>접수된 분쟁이 없어요.</td>
+                <td className={`${tdClass} text-slate-400`} colSpan={6}>
+                  접수된 분쟁이 없어요.
+                </td>
               </tr>
             ) : null}
           </tbody>
@@ -156,76 +150,6 @@ export function TradesAdmin() {
           }}
         />
       ) : null}
-      <Panel title="정산 요청" description={`요청일 기준 정렬 · 이 목록의 승인 대기 ${waiting}건`} flush>
-        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3">
-          <input value={settleEmail} onChange={(event) => setSettleEmail(event.target.value)} placeholder="판매자 이메일" className={`${fieldClass} max-w-xs`} />
-          <select value={settleStatus} onChange={(event) => setSettleStatus(event.target.value)} className={`${fieldClass} max-w-[160px]`}>
-            <option value="전체">전체 상태</option>
-            {SETTLEMENT_STATUSES.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </div>
-        <DataTable className="min-w-[1080px]">
-          <thead>
-            <tr>
-              <th className={thClass}>판매자</th>
-              <th className={thClass}>영문 예금주</th>
-              <th className={thClass}>계좌</th>
-              <th className={thClass}>은행</th>
-              <th className={thClass}>은행코드</th>
-              <th className={thClass}>정산액</th>
-              <th className={thClass}>요청일</th>
-              <th className={thClass}>상태</th>
-              <th className={thClass}>승인</th>
-            </tr>
-          </thead>
-          <tbody>
-            {settleRows.map((item) => (
-              <tr key={item.id}>
-                <td className={tdClass}>
-                  <span className="block font-medium text-slate-900">{item.seller}</span>
-                  <span className="text-xs text-slate-400">
-                    {item.email} · 거래 {item.trades}건
-                  </span>
-                </td>
-                <td className={tdClass}>{item.holderEn}</td>
-                <td className={`${tdClass} tabular-nums`}>{item.account}</td>
-                <td className={tdClass}>{item.bankEn}</td>
-                <td className={tdClass}>{item.bankCode}</td>
-                <td className={`${tdClass} tabular-nums`}>{formatPrice(item.amount)}</td>
-                <td className={`${tdClass} tabular-nums`}>{item.requestedAt}</td>
-                <td className={tdClass}>
-                  <StatusPill tone={item.status === "정산대기" ? "amber" : item.status === "승인완료" ? "emerald" : "slate"}>{item.status}</StatusPill>
-                </td>
-                <td className={tdClass}>
-                  <button
-                    type="button"
-                    disabled={item.status !== "정산대기"}
-                    onClick={() => {
-                      approveSettlement(item.id);
-                      setNotice(`${item.seller} 님의 정산 ${formatPrice(item.amount)}을 승인했어요. ${item.holderEn} · ${item.account} · ${item.bankEn} · ${item.bankCode}`);
-                    }}
-                    className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:bg-slate-100 disabled:text-slate-300"
-                  >
-                    정산 승인
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {shownSettlements.length === 0 ? (
-              <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={9}>
-                  표시할 정산 요청이 없어요.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </DataTable>
-        <AdminPager page={settlePage.page} pageCount={settlePage.pageCount} total={settlePage.total} pageSize={settlePage.pageSize} onPage={settlePage.setPage} />
-      </Panel>
     </div>
   );
 }
@@ -257,11 +181,9 @@ function TradeDetail({ trade, onClose, onStatus }: { trade: AdminTrade; onClose:
         ]}
       />
       <div className="mt-4 flex flex-wrap justify-end gap-2">
-        {ADMIN_TRADE_STATUSES.includes("거래취소") ? (
-          <button type="button" disabled={trade.status === "거래취소"} onClick={() => onStatus("거래취소")} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 disabled:text-slate-300">
-            거래 취소
-          </button>
-        ) : null}
+        <button type="button" disabled={trade.status === "거래취소"} onClick={() => onStatus("거래취소")} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 disabled:text-slate-300">
+          거래 취소
+        </button>
         <button type="button" disabled={trade.status === "분쟁"} onClick={() => onStatus("분쟁")} className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 disabled:bg-transparent disabled:text-slate-300">
           분쟁
         </button>
