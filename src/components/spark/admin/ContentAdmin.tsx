@@ -7,7 +7,7 @@ import { fieldClass, ghostButtonClass, primaryButtonClass } from "@/components/s
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
 import { FAQ_CATEGORIES } from "@/data/mockData";
-import { addFaq, addNotice, addTerm, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
+import { addFaq, addNotice, softDeleteFaq, softDeleteNotice, useShared } from "@/data/shared";
 
 const INQUIRY_FILTERS = ["전체", "미답변", "답변완료"] as const;
 type InquiryFilter = (typeof INQUIRY_FILTERS)[number];
@@ -303,11 +303,6 @@ export function FaqsAdmin() {
 
 export function TermsAdmin() {
   const shared = useShared();
-  const { session } = useAdmin();
-  const [notice, setNotice] = useState("");
-  const [termTitle, setTermTitle] = useState("");
-  const [termVersion, setTermVersion] = useState("");
-  const [termBody, setTermBody] = useState("");
   const sorted = useMemo(
     () => shared.terms.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [shared.terms],
@@ -320,50 +315,9 @@ export function TermsAdmin() {
       <div>
         <p className="text-[11px] font-medium tracking-[0.22em] text-slate-400">TERMS</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">약관 관리</h1>
-        <p className="mt-2 text-sm text-slate-500">약관은 HTML 본문으로 저장되며, 목록에서 상세 조회할 수 있습니다.</p>
-        {notice ? <p className="mt-2 text-sm text-slate-500">{notice}</p> : null}
+        <p className="mt-2 text-sm text-slate-500">약관은 개발자가 코드로 배포한 정적 HTML만 사용합니다. 운영자는 공개 링크와 목록·상세만 확인합니다.</p>
       </div>
-      <Panel title="약관 등록" description="제목·버전·HTML 본문을 등록합니다. 작성자는 현재 운영자입니다.">
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!termTitle.trim() || !termVersion.trim() || !termBody.trim()) return;
-            const slug = termTitle
-              .trim()
-              .toLowerCase()
-              .replace(/[^a-z0-9가-힣]+/gi, "-")
-              .replace(/^-|-$/g, "") || `term-${Date.now()}`;
-            addTerm({
-              id: crypto.randomUUID(),
-              title: termTitle.trim(),
-              version: termVersion.trim(),
-              author: session?.loginId ?? "운영자",
-              body: termBody.trim(),
-              createdAt: new Date().toISOString().slice(0, 10),
-              slug,
-            });
-            setTermTitle("");
-            setTermVersion("");
-            setTermBody("");
-            setNotice("약관 버전을 추가했어요.");
-          }}
-        >
-          <input value={termTitle} onChange={(event) => setTermTitle(event.target.value)} placeholder="제목" className={fieldClass} />
-          <input value={termVersion} onChange={(event) => setTermVersion(event.target.value)} placeholder="버전 (예: 1.2.0)" className={fieldClass} />
-          <textarea
-            value={termBody}
-            onChange={(event) => setTermBody(event.target.value)}
-            placeholder="HTML 본문 (<section>...</section>)"
-            rows={6}
-            className={fieldClass}
-          />
-          <button type="submit" className={primaryButtonClass}>
-            약관 추가
-          </button>
-        </form>
-      </Panel>
-      <Panel title="약관 목록" flush>
+      <Panel title="약관 목록" description="등록·수정은 코드 배포로만 반영됩니다." flush>
         <DataTable>
           <thead>
             <tr>
@@ -371,12 +325,13 @@ export function TermsAdmin() {
               <th className={thClass}>버전</th>
               <th className={thClass}>작성자</th>
               <th className={thClass}>작성일</th>
+              <th className={thClass}>정적 HTML</th>
               <th className={thClass}>상세</th>
             </tr>
           </thead>
           <tbody>
             {termRows.map((item) => (
-              <tr key={item.id} className="cursor-pointer hover:bg-slate-50">
+              <tr key={item.id} className="hover:bg-slate-50">
                 <td className={`${tdClass} font-medium text-slate-900`}>
                   <Link href={`/admin/terms/${item.id}`} className="hover:underline">
                     {item.title}
@@ -386,6 +341,11 @@ export function TermsAdmin() {
                 <td className={tdClass}>{item.author}</td>
                 <td className={`${tdClass} tabular-nums`}>{item.createdAt}</td>
                 <td className={tdClass}>
+                  <Link href={`/legal/html/${item.slug}`} className="text-xs text-slate-600 underline underline-offset-2" target="_blank" rel="noreferrer">
+                    /legal/html/{item.slug}
+                  </Link>
+                </td>
+                <td className={tdClass}>
                   <Link href={`/admin/terms/${item.id}`} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600">
                     조회
                   </Link>
@@ -394,7 +354,7 @@ export function TermsAdmin() {
             ))}
             {sorted.length === 0 ? (
               <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={5}>
+                <td className={`${tdClass} text-slate-400`} colSpan={6}>
                   등록된 약관이 없어요.
                 </td>
               </tr>
@@ -430,6 +390,7 @@ export function TermsDetailAdmin({ termId }: { termId: string }) {
         </Link>
         <p className="mt-3 text-[11px] font-medium tracking-[0.22em] text-slate-400">TERM DETAIL</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{term.title}</h1>
+        <p className="mt-2 text-sm text-slate-500">개발자가 배포한 정적 HTML을 조회합니다. 어드민에서 등록·수정할 수 없습니다.</p>
       </div>
       <dl className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-2">
         <div>
@@ -445,16 +406,16 @@ export function TermsDetailAdmin({ termId }: { termId: string }) {
           <dd className="mt-1 text-sm tabular-nums text-slate-900">{term.createdAt}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-slate-400">공개 경로</dt>
+          <dt className="text-xs font-medium text-slate-400">정적 HTML 링크</dt>
           <dd className="mt-1 text-sm text-slate-900">
-            <Link href={`/legal/html/${term.slug}`} className="underline underline-offset-2">
+            <Link href={`/legal/html/${term.slug}`} className="underline underline-offset-2" target="_blank" rel="noreferrer">
               /legal/html/{term.slug}
             </Link>
           </dd>
         </div>
       </dl>
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900">HTML 내용</h2>
+        <h2 className="text-sm font-semibold text-slate-900">HTML 미리보기</h2>
         <article
           className="prose prose-slate mt-4 max-w-none text-sm leading-7 text-slate-700 [&_h2]:text-lg [&_h2]:font-semibold [&_li]:my-1 [&_p]:my-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5"
           dangerouslySetInnerHTML={{ __html: term.body }}

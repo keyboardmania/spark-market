@@ -68,6 +68,7 @@ type AdminContextValue = {
   setTradeStatus: (id: string, status: AdminTradeStatus) => void;
   settlements: AdminSettlement[];
   approveSettlement: (id: string) => void;
+  approveSettlementCancel: (id: string) => { ok: true; tradeIds: string[] } | { ok: false; message: string };
   inquiries: AdminInquiry[];
   replyInquiry: (id: string, reply: string) => void;
   markInquiryRead: (id: string) => void;
@@ -340,9 +341,38 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       },
       settlements,
       approveSettlement(id) {
+        const target = settlements.find((item) => item.id === id && item.status === "정산 승인 대기");
+        if (!target) return;
+        const tradeIds = target.tradeIds;
+        const completedAt = stampNow();
         setSettlements((current) =>
-          current.map((item) => (item.id === id ? { ...item, status: "승인완료" } : item)),
+          current.map((item) => (item.id === id ? { ...item, status: "정산 완료", completedAt } : item)),
         );
+        setTrades((current) =>
+          current.map((trade) =>
+            tradeIds.includes(trade.id) ? { ...trade, settlement: { ...trade.settlement, status: "정산 완료" } } : trade,
+          ),
+        );
+      },
+      approveSettlementCancel(id) {
+        const target = settlements.find((item) => item.id === id);
+        if (!target) return { ok: false as const, message: "정산 요청을 찾을 수 없어요." };
+        if (target.status !== "정산 취소 대기") {
+          return { ok: false as const, message: "정산 취소 대기 건만 승인할 수 있어요." };
+        }
+        const tradeIds = target.tradeIds.slice();
+        const completedAt = stampNow();
+        setSettlements((current) =>
+          current.map((item) => (item.id === id ? { ...item, status: "정산 취소 완료", completedAt } : item)),
+        );
+        setTrades((current) =>
+          current.map((trade) =>
+            tradeIds.includes(trade.id)
+              ? { ...trade, status: "취소(환불)", settlement: { ...trade.settlement, status: "정산 취소 완료" } }
+              : trade,
+          ),
+        );
+        return { ok: true as const, tradeIds };
       },
       inquiries,
       replyInquiry(id, reply) {
@@ -456,6 +486,19 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   );
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
+}
+
+function stampNow() {
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(new Date())
+    .replace(/\. /g, ".")
+    .replace(/\.$/, "");
 }
 
 function fail(field: AdminLoginFailure["field"], message: string): AdminLoginFailure {

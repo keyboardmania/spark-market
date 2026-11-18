@@ -2230,7 +2230,7 @@ export const PRODUCT_FLAGS = [
   { productId: "bl-ichigo-sp", flag: "금지" as const, reason: "거래 불가 이미지 포함" },
 ];
 
-export const ADMIN_TRADE_STATUSES = ["결제완료", "배송중", "배송완료", "구매확정", "거래취소", "분쟁"] as const;
+export const ADMIN_TRADE_STATUSES = ["결제완료", "배송중", "배송완료", "구매확정", "거래취소", "취소(환불)"] as const;
 export type AdminTradeStatus = (typeof ADMIN_TRADE_STATUSES)[number];
 
 export type TradeSettlementSnapshot = {
@@ -2265,12 +2265,19 @@ export const ADMIN_TRADES: AdminTrade[] = [
   { id: "SPK-240221", productId: "sanrio-kitty-pouch", title: "산리오 헬로키티 빈티지 파우치", buyer: "김서연", seller: "모모", buyerEmail: "seoyeon@spark.market", sellerEmail: "momo.ribbon@spark.market", buyerAddress: "서울 마포구 성산로 12, 302호", sellerAddress: "경기 성남시 분당구 판교역로 90", amount: 36, paymentMethod: "애플페이", status: "결제완료", orderedAt: "2026.10.26", settlement: { amount: 32.4, holderEn: "MOMO RIBBON", account: "1002-456-778901", bankEn: "WOORI BANK", bankCode: "020", status: "정산 전" } },
   { id: "SPK-240198", productId: "pkmn-eevee-promo", title: "포켓몬 이브이 프로모 카드", buyer: "김서연", seller: "카드서랍", buyerEmail: "seoyeon@spark.market", sellerEmail: "slab.drawer@spark.market", buyerAddress: "서울 마포구 성산로 12, 302호", sellerAddress: "서울 성동구 연무장길 18, 1층", amount: 47, paymentMethod: "구글페이", status: "배송중", orderedAt: "2026.10.24", settlement: { amount: 42.3, holderEn: "CARD DRAWER", account: "110-224-881234", bankEn: "KOOKMIN BANK", bankCode: "004", status: "정산 전" } },
   { id: "SPK-240144", productId: "hq-karasuno-bgs", title: "하이큐!! 카라스노 유니폼 카드 BGS 9.5", buyer: "김서연", seller: "카드서랍", buyerEmail: "seoyeon@spark.market", sellerEmail: "slab.drawer@spark.market", buyerAddress: "서울 마포구 성산로 12, 302호", sellerAddress: "서울 성동구 연무장길 18, 1층", amount: 74, paymentMethod: "휴대폰", status: "배송완료", orderedAt: "2026.10.20", settlement: { amount: 66.6, holderEn: "CARD DRAWER", account: "110-224-881234", bankEn: "KOOKMIN BANK", bankCode: "004", status: "정산 전" } },
-  { id: "SPK-239880", productId: "bl-rukia-stand", title: "블리치 루키아 아크릴 스탠드", buyer: "소라", seller: "나", buyerEmail: "sora@spark.market", sellerEmail: "me@spark.market", buyerAddress: "인천 연수구 송도과학로 32, 803호", sellerAddress: "서울 용산구 한강대로 100", amount: 28, paymentMethod: "신용/체크카드", status: "분쟁", orderedAt: "2026.10.23", settlement: { amount: 25.2, holderEn: "SPARK ME", account: "110-000-000001", bankEn: "KOOKMIN BANK", bankCode: "004", status: "보류" } },
-  { id: "SPK-240090", productId: "chii-usagi-mini", title: "먼작귀 우사기 미니 피규어", buyer: "김서연", seller: "치이", buyerEmail: "seoyeon@spark.market", sellerEmail: "chii.pocket@spark.market", buyerAddress: "서울 마포구 성산로 12, 302호", sellerAddress: "부산 수영구 광안해변로 8", amount: 32, paymentMethod: "페이팔", status: "구매확정", orderedAt: "2026.10.12", settlement: { amount: 28.8, holderEn: "CHII POCKET", account: "3333-01-998812", bankEn: "SHINHAN BANK", bankCode: "088", status: "정산대기" } },
+  { id: "SPK-239880", productId: "bl-rukia-stand", title: "블리치 루키아 아크릴 스탠드", buyer: "소라", seller: "나", buyerEmail: "sora@spark.market", sellerEmail: "me@spark.market", buyerAddress: "인천 연수구 송도과학로 32, 803호", sellerAddress: "서울 용산구 한강대로 100", amount: 28, paymentMethod: "신용/체크카드", status: "배송완료", orderedAt: "2026.10.23", settlement: { amount: 25.2, holderEn: "SPARK ME", account: "110-000-000001", bankEn: "KOOKMIN BANK", bankCode: "004", status: "정산 취소 대기" } },
+  { id: "SPK-240090", productId: "chii-usagi-mini", title: "먼작귀 우사기 미니 피규어", buyer: "김서연", seller: "치이", buyerEmail: "seoyeon@spark.market", sellerEmail: "chii.pocket@spark.market", buyerAddress: "서울 마포구 성산로 12, 302호", sellerAddress: "부산 수영구 광안해변로 8", amount: 32, paymentMethod: "페이팔", status: "구매확정", orderedAt: "2026.10.12", settlement: { amount: 28.8, holderEn: "CHII POCKET", account: "3333-01-998812", bankEn: "SHINHAN BANK", bankCode: "088", status: "정산 승인 대기" } },
 ];
 
-export const SETTLEMENT_STATUSES = ["정산대기", "승인완료", "보류"] as const;
+export const SETTLEMENT_STATUSES = ["정산 승인 대기", "정산 취소 대기", "정산 완료", "정산 취소 완료"] as const;
 export type SettlementStatus = (typeof SETTLEMENT_STATUSES)[number];
+
+export const SETTLEMENT_VIEW_FILTERS = ["전체 정산 기록", "정산 승인 대기", "정산 취소 대기", "정산 완료", "정산 취소 완료"] as const;
+export type SettlementViewFilter = (typeof SETTLEMENT_VIEW_FILTERS)[number];
+
+/** @deprecated Use SETTLEMENT_VIEW_FILTERS */
+export const SETTLEMENT_QUEUE_FILTERS = ["정산 승인 대기", "정산 취소 대기"] as const;
+export type SettlementQueueFilter = (typeof SETTLEMENT_QUEUE_FILTERS)[number];
 
 export type AdminSettlement = {
   id: string;
@@ -2278,7 +2285,9 @@ export type AdminSettlement = {
   email: string;
   amount: number;
   trades: number;
+  tradeIds: string[];
   requestedAt: string;
+  completedAt: string | null;
   status: SettlementStatus;
   holderEn: string;
   account: string;
@@ -2287,10 +2296,12 @@ export type AdminSettlement = {
 };
 
 export const ADMIN_SETTLEMENTS: AdminSettlement[] = [
-  { id: "stl-1042", seller: "카드서랍", email: "slab.drawer@spark.market", amount: 1860, trades: 4, requestedAt: "2026.10.27", status: "정산대기", holderEn: "CARD DRAWER", account: "110-224-881234", bankEn: "KOOKMIN BANK", bankCode: "004" },
-  { id: "stl-1041", seller: "치이", email: "chii.pocket@spark.market", amount: 130, trades: 2, requestedAt: "2026.10.27", status: "정산대기", holderEn: "CHII POCKET", account: "3333-01-998812", bankEn: "SHINHAN BANK", bankCode: "088" },
-  { id: "stl-1033", seller: "모모", email: "momo.ribbon@spark.market", amount: 54, trades: 1, requestedAt: "2026.10.25", status: "보류", holderEn: "MOMO RIBBON", account: "1002-456-778901", bankEn: "WOORI BANK", bankCode: "020" },
-  { id: "stl-1020", seller: "하루", email: "haru.court@spark.market", amount: 92, trades: 1, requestedAt: "2026.10.18", status: "승인완료", holderEn: "HARU COURT", account: "302-1100-4455", bankEn: "HANA BANK", bankCode: "081" },
+  { id: "stl-1042", seller: "카드서랍", email: "slab.drawer@spark.market", amount: 1860, trades: 4, tradeIds: ["SPK-240318", "SPK-240198", "SPK-240144"], requestedAt: "2026.10.27", completedAt: null, status: "정산 승인 대기", holderEn: "CARD DRAWER", account: "110-224-881234", bankEn: "KOOKMIN BANK", bankCode: "004" },
+  { id: "stl-1041", seller: "치이", email: "chii.pocket@spark.market", amount: 130, trades: 2, tradeIds: ["SPK-240317", "SPK-240090"], requestedAt: "2026.10.27", completedAt: null, status: "정산 승인 대기", holderEn: "CHII POCKET", account: "3333-01-998812", bankEn: "SHINHAN BANK", bankCode: "088" },
+  { id: "stl-1033", seller: "모모", email: "momo.ribbon@spark.market", amount: 54, trades: 1, tradeIds: ["SPK-240221"], requestedAt: "2026.10.25", completedAt: null, status: "정산 취소 대기", holderEn: "MOMO RIBBON", account: "1002-456-778901", bankEn: "WOORI BANK", bankCode: "020" },
+  { id: "stl-1030", seller: "나", email: "me@spark.market", amount: 25.2, trades: 1, tradeIds: ["SPK-239880"], requestedAt: "2026.10.24", completedAt: null, status: "정산 취소 대기", holderEn: "SPARK ME", account: "110-000-000001", bankEn: "KOOKMIN BANK", bankCode: "004" },
+  { id: "stl-1020", seller: "하루", email: "haru.court@spark.market", amount: 92, trades: 1, tradeIds: [], requestedAt: "2026.10.18", completedAt: "2026.10.20 11:30", status: "정산 완료", holderEn: "HARU COURT", account: "302-1100-4455", bankEn: "HANA BANK", bankCode: "081" },
+  { id: "stl-1012", seller: "카드서랍", email: "slab.drawer@spark.market", amount: 48, trades: 1, tradeIds: ["SPK-239880"], requestedAt: "2026.10.12", completedAt: "2026.10.15 16:05", status: "정산 취소 완료", holderEn: "CARD DRAWER", account: "110-224-881234", bankEn: "KOOKMIN BANK", bankCode: "004" },
 ];
 
 export type InquiryStatus = "미답변" | "답변완료";
@@ -2346,7 +2357,7 @@ export const ADMIN_INQUIRIES: AdminInquiry[] = [
   },
 ];
 
-export const REPORT_STATUSES = ["접수", "검토", "수락", "거절"] as const;
+export const REPORT_STATUSES = ["접수", "수락", "거절"] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 export type ReportCategory = "상품" | "유저" | "리뷰";
 
@@ -2412,7 +2423,7 @@ export const ADMIN_REPORTS: AdminReport[] = [
   { id: "rpt-review-3", category: "리뷰", targetType: "리뷰", targetId: "rv-9", targetLabel: "오렌지코트의 피카츄 카드 후기", reason: "다른 상점 후기를 그대로 붙였어요.", media: [], reporter: "모모", createdAt: "2026.10.23 19:33", status: "수락" },
   { id: "rpt-79", category: "유저", targetType: "유저", targetId: "orange", targetLabel: "오렌지코트", reason: "채팅에서 욕설 후 거래를 일방 취소했어요.", media: [], reporter: "소라", createdAt: "2026.10.24 21:03", status: "접수" },
   { id: "rpt-review-open", category: "리뷰", targetType: "리뷰", targetId: "rv-9", targetLabel: "오렌지코트의 피카츄 카드 후기", reason: "상품을 받아 보지도 않은 내용이에요.", media: [], reporter: "김서연", createdAt: "2026.10.25 16:20", status: "접수" },
-  { id: "rpt-84", category: "상품", targetType: "상품", targetId: "bl-ichigo-sp", targetLabel: "블리치 쿠로사키 이치고 POP UP PARADE", reason: "슬랩 사진이 다른 매물과 동일해요.", media: [], reporter: "카드서랍", createdAt: "2026.10.26 19:48", status: "검토" },
+  { id: "rpt-84", category: "상품", targetType: "상품", targetId: "bl-ichigo-sp", targetLabel: "블리치 쿠로사키 이치고 POP UP PARADE", reason: "슬랩 사진이 다른 매물과 동일해요.", media: [], reporter: "카드서랍", createdAt: "2026.10.26 19:48", status: "접수" },
   { id: "rpt-88", category: "상품", targetType: "상품", targetId: "sanrio-kuromi-set", targetLabel: "산리오 쿠로미 키구루미 파자마 돌", reason: "가품 의심. 태그 폰트가 달라요.", media: [{ id: "media-88", name: "실물 태그.jpg", url: KUROMI_EVIDENCE }], reporter: "모모", createdAt: "2026.10.27 13:12", status: "접수" },
   { id: "rpt-cat-1", category: "상품", targetType: "상품", targetId: "cn-art-cat", targetLabel: "하이큐!! 전국대회 서프라이즈 넨도로이드", reason: "같은 슈링크 사진이 다른 상점에 있어요.", media: [], reporter: "하루", createdAt: "2026.10.11 09:18", status: "수락" },
   { id: "rpt-cat-2", category: "상품", targetType: "상품", targetId: "cn-art-cat", targetLabel: "하이큐!! 전국대회 서프라이즈 넨도로이드", reason: "박스 홀로그램이 정품과 달라요.", media: [], reporter: "치이", createdAt: "2026.10.14 16:40", status: "수락" },

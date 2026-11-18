@@ -1,19 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatPrice, getProductById, type AdminTrade, type AdminTradeStatus } from "@/data/mockData";
 import { useAdmin } from "@/components/spark/AdminProvider";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { fieldClass } from "@/components/spark/styles";
 import { DataTable, DetailModal, DetailRows, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { useShared } from "@/data/shared";
 
-const PHASES = ["진행 중", "구매 확정", "취소", "분쟁"] as const;
+const PHASES = ["진행 중", "구매 확정", "취소"] as const;
 type TradePhase = (typeof PHASES)[number];
 
 export function TradesAdmin() {
   const { trades, setTradeStatus } = useAdmin();
-  const disputes = useShared().disputes;
   const [notice, setNotice] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"전체" | TradePhase>("전체");
@@ -26,15 +24,6 @@ export function TradesAdmin() {
   const selected = trades.find((trade) => trade.id === selectedId) ?? null;
   const tradePage = useAdminPage(shown.length, `${email}:${status}`);
   const tradeRows = shown.slice(tradePage.start, tradePage.start + tradePage.pageSize);
-  const disputePage = useAdminPage(disputes.length, "disputes");
-  const disputeRows = disputes.slice(disputePage.start, disputePage.start + disputePage.pageSize);
-
-  useEffect(() => {
-    for (const dispute of disputes) {
-      const trade = trades.find((item) => item.id === dispute.orderId && item.status !== "분쟁" && item.status !== "거래취소");
-      if (trade) setTradeStatus(trade.id, "분쟁");
-    }
-  }, [disputes, setTradeStatus, trades]);
 
   return (
     <div className="space-y-6">
@@ -54,42 +43,6 @@ export function TradesAdmin() {
           ))}
         </select>
       </div>
-      <Panel title="분쟁" description="배송 완료 후 취소는 이 목록으로 자동 접수됩니다." flush>
-        <DataTable>
-          <thead>
-            <tr>
-              <th className={thClass}>주문</th>
-              <th className={thClass}>상품</th>
-              <th className={thClass}>구매자</th>
-              <th className={thClass}>판매자</th>
-              <th className={thClass}>사유</th>
-              <th className={thClass}>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {disputeRows.map((dispute) => (
-              <tr key={dispute.id}>
-                <td className={tdClass}>{dispute.orderId}</td>
-                <td className={`${tdClass} font-medium text-slate-900`}>{dispute.title}</td>
-                <td className={tdClass}>{dispute.buyer}</td>
-                <td className={tdClass}>{dispute.seller}</td>
-                <td className={tdClass}>{dispute.reason}</td>
-                <td className={tdClass}>
-                  <StatusPill tone="amber">{dispute.status}</StatusPill>
-                </td>
-              </tr>
-            ))}
-            {disputes.length === 0 ? (
-              <tr>
-                <td className={`${tdClass} text-slate-400`} colSpan={6}>
-                  접수된 분쟁이 없어요.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </DataTable>
-        <AdminPager page={disputePage.page} pageCount={disputePage.pageCount} total={disputePage.total} pageSize={disputePage.pageSize} onPage={disputePage.setPage} />
-      </Panel>
       <Panel title="거래 내역" description="행을 누르면 상품, 결제, 주소, 정산 정보를 볼 수 있어요." flush>
         <DataTable>
           <thead>
@@ -110,7 +63,9 @@ export function TradesAdmin() {
                   <td className={tdClass}>{trade.sellerEmail}</td>
                   <td className={tdClass}>{trade.buyerEmail}</td>
                   <td className={tdClass}>
-                    <StatusPill tone={phase === "취소" ? "slate" : phase === "구매 확정" ? "emerald" : "sky"}>{phase}</StatusPill>
+                    <StatusPill tone={phase === "취소" ? "slate" : phase === "구매 확정" ? "emerald" : "sky"}>
+                      {trade.status === "취소(환불)" ? "취소(환불)" : phase}
+                    </StatusPill>
                   </td>
                   <td className={`${tdClass} tabular-nums`}>{formatPrice(trade.amount)}</td>
                   <td className={`${tdClass} font-medium text-slate-900`}>{trade.title}</td>
@@ -146,7 +101,11 @@ export function TradesAdmin() {
           onClose={() => setSelectedId(null)}
           onStatus={(next) => {
             setTradeStatus(selected.id, next);
-            setNotice(next === "거래취소" ? `${selected.id} 거래를 취소했어요.` : `${selected.id} 거래를 분쟁으로 전환했어요.`);
+            setNotice(
+              next === "취소(환불)"
+                ? `${selected.id} 거래를 취소(환불)로 바꿨어요.`
+                : `${selected.id} 거래를 취소했어요.`,
+            );
           }}
         />
       ) : null}
@@ -158,6 +117,7 @@ function TradeDetail({ trade, onClose, onStatus }: { trade: AdminTrade; onClose:
   const close = useMemo(() => onClose, [onClose]);
   const product = getProductById(trade.productId);
   const image = product?.imageUrl;
+  const cancelled = trade.status === "거래취소" || trade.status === "취소(환불)";
   return (
     <DetailModal title="거래 상세" onClose={close} wide>
       <div className="mb-4 flex gap-4">
@@ -181,11 +141,13 @@ function TradeDetail({ trade, onClose, onStatus }: { trade: AdminTrade; onClose:
         ]}
       />
       <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <button type="button" disabled={trade.status === "거래취소"} onClick={() => onStatus("거래취소")} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 disabled:text-slate-300">
+        <button
+          type="button"
+          disabled={cancelled}
+          onClick={() => onStatus("거래취소")}
+          className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 disabled:text-slate-300"
+        >
           거래 취소
-        </button>
-        <button type="button" disabled={trade.status === "분쟁"} onClick={() => onStatus("분쟁")} className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 disabled:bg-transparent disabled:text-slate-300">
-          분쟁
         </button>
       </div>
     </DetailModal>
@@ -194,7 +156,6 @@ function TradeDetail({ trade, onClose, onStatus }: { trade: AdminTrade; onClose:
 
 function tradePhase(status: AdminTradeStatus): TradePhase {
   if (status === "구매확정") return "구매 확정";
-  if (status === "거래취소") return "취소";
-  if (status === "분쟁") return "분쟁";
+  if (status === "거래취소" || status === "취소(환불)") return "취소";
   return "진행 중";
 }

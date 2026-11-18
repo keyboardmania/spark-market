@@ -33,7 +33,7 @@ export type LiveReport = {
   media: ReportMedia[];
   reporter: string;
   createdAt: string;
-  status: "접수" | "검토" | "수락" | "거절";
+  status: "접수" | "수락" | "거절";
   isRead?: boolean;
 };
 
@@ -173,14 +173,6 @@ export function rejectReport(id: string) {
   emit({
     ...base,
     reports: base.reports.map((report) => (report.id === id ? { ...report, status: "거절" } : report)),
-  });
-}
-
-export function reviewReport(id: string) {
-  const base = purgeExpired(state);
-  emit({
-    ...base,
-    reports: base.reports.map((report) => (report.id === id && report.status === "접수" ? { ...report, status: "검토" } : report)),
   });
 }
 
@@ -340,6 +332,3 @@ export function softDeleteNotice(id: string) {
   });
 }
 
-export function addTerm(term: TermVersion) {
-  emit({ ...state, terms: [term, ...state.terms] });
-}

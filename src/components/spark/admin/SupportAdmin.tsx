@@ -5,9 +5,9 @@ import { useSpark } from "@/components/spark/SparkProvider";
 import { fieldClass } from "@/components/spark/styles";
 import { AdminPager, useAdminPage } from "@/components/spark/admin/paging";
 import { DataTable, DetailModal, DetailRows, FilterBar, FilterField, Panel, StatusPill, tdClass, thClass } from "@/components/spark/admin/ui";
-import { acceptReport, isReportClosed, markReportRead, rejectReport, reportCategory, reportTimestamp, reviewReport, useShared, type LiveReport } from "@/data/shared";
+import { acceptReport, isReportClosed, markReportRead, rejectReport, reportCategory, reportTimestamp, useShared, type LiveReport } from "@/data/shared";
 
-const FILTERS = ["완료 제외", "전체", "접수", "검토", "수락", "거절"] as const;
+const FILTERS = ["완료 제외", "전체", "접수", "수락", "거절"] as const;
 type ReportFilter = (typeof FILTERS)[number];
 
 export function SupportAdmin() {
@@ -71,7 +71,7 @@ export function SupportAdmin() {
           </thead>
           <tbody>
             {reportRows.map((report) => {
-              const unread = (report.status === "접수" || report.status === "검토") && !report.isRead;
+              const unread = report.status === "접수" && !report.isRead;
               return (
                 <tr
                   key={report.id}
@@ -148,7 +148,7 @@ function ReportDetail({
 }) {
   const close = useMemo(() => onClose, [onClose]);
   const strikes = reports.filter((item) => item.status === "수락" && item.targetId === report.targetId && reportCategory(item.targetType) === reportCategory(report.targetType)).length;
-  const open = report.status === "접수" || report.status === "검토";
+  const open = report.status === "접수";
   return (
     <DetailModal title="신고 상세" onClose={close} wide>
       <DetailRows
@@ -179,18 +179,6 @@ function ReportDetail({
       </div>
       {open ? (
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          {report.status === "접수" ? (
-            <button
-              type="button"
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-xs"
-              onClick={() => {
-                reviewReport(report.id);
-                onNotice("신고를 검토 상태로 바꿨어요.");
-              }}
-            >
-              검토
-            </button>
-          ) : null}
           <button
             type="button"
             className="rounded-full bg-slate-900 px-3 py-1.5 text-xs text-white"
@@ -217,6 +205,5 @@ function ReportDetail({
 function reportTone(status: LiveReport["status"]) {
   if (status === "수락") return "emerald" as const;
   if (status === "거절") return "slate" as const;
-  if (status === "검토") return "amber" as const;
   return "rose" as const;
 }

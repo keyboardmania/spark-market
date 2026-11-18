@@ -46,7 +46,7 @@ function AdminFrame({ children, session }: { children: ReactNode; session: { log
   const router = useRouter();
   const { logout, inquiries } = useAdmin();
   const shared = useShared();
-  const openReports = shared.reports.filter((item) => (item.status === "접수" || item.status === "검토") && !item.isRead).length;
+  const openReports = shared.reports.filter((item) => item.status === "접수" && !item.isRead).length;
   const openInquiries = inquiries.filter((item) => item.status === "미답변" && !item.isRead).length;
 
   function signOut() {

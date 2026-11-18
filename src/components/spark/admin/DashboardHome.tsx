@@ -12,11 +12,11 @@ export function DashboardHome() {
   const { trades, members, inquiries } = useAdmin();
   const reports = useShared().reports;
   const todaySales = trades
-    .filter((trade) => trade.orderedAt === ADMIN_TODAY && trade.status !== "거래취소")
+    .filter((trade) => trade.orderedAt === ADMIN_TODAY && trade.status !== "거래취소" && trade.status !== "취소(환불)")
     .reduce((sum, trade) => sum + trade.amount, 0);
   const newMembers = members.filter((member) => member.joinedAt === ADMIN_TODAY).length;
   const openInquiryItems = inquiries.filter((item) => item.status === "미답변");
-  const openReportItems = reports.filter((item) => item.status === "접수" || item.status === "검토");
+  const openReportItems = reports.filter((item) => item.status === "접수");
   const openInquiries = openInquiryItems.length;
   const openReports = openReportItems.length;
   const todayTrades = trades
@@ -43,7 +43,7 @@ export function DashboardHome() {
         <StatCard label="오늘 거래액" value={formatPrice(todaySales)} hint={`${ADMIN_TODAY} 결제 기준, 취소 제외`} />
         <StatCard label="신규 가입자" value={`${newMembers}명`} hint="오늘 가입한 회원" />
         <StatCard label="미처리 문의" value={`${openInquiries}건`} hint="답변이 필요한 1:1 문의" />
-        <StatCard label="미처리 신고" value={`${openReports}건`} hint="접수·검토 상태인 신고" />
+        <StatCard label="미처리 신고" value={`${openReports}건`} hint="접수 상태인 신고" />
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel
